@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${lesson.title} + ' - FORGE'">Lesson - FORGE</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Video Player / Content -->
+            <div class="mb-4">
+                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background-color: #000;">
+                    <video style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" controls>
+                        <source th:src="${lesson.videoUrl}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+
+            <!-- Lesson Info -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h2 class="mb-2" th:text="${lesson.title}">Lesson Title</h2>
+                    <p class="text-muted mb-3">
+                        <i class="fas fa-book"></i> <span th:text="${module.title}">Module Name</span> • 
+                        <i class="fas fa-clock"></i> <span th:text="${lesson.duration} + ' min'">15 min</span>
+                    </p>
+                    <p th:text="${lesson.description}">Lesson description goes here.</p>
+                    
+                    <div class="alert alert-info mt-4">
+                        <i class="fas fa-lightbulb"></i> 
+                        <strong>Key Concepts:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li th:each="concept : ${lesson.keyConcepts}" th:text="${concept}">Concept</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lesson Content Tabs -->
+            <div class="card mb-4">
+                <div class="card-header" style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                    <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#overview" data-bs-toggle="tab">
+                                <i class="fas fa-file-alt"></i> Overview
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#notes" data-bs-toggle="tab">
+                                <i class="fas fa-sticky-note"></i> Notes
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#resources" data-bs-toggle="tab">
+                                <i class="fas fa-link"></i> Resources
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content">
+                        <!-- Overview Tab -->
+                        <div class="tab-pane fade show active" id="overview">
+                            <h5>Lesson Overview</h5>
+                            <p th:text="${lesson.overview}">Detailed lesson overview content</p>
+                            
+                            <h6 class="mt-4">Learning Objectives</h6>
+                            <ul>
+                                <li th:each="objective : ${lesson.objectives}" th:text="${objective}">Objective</li>
+                            </ul>
+                        </div>
+
+                        <!-- Notes Tab -->
+                        <div class="tab-pane fade" id="notes">
+                            <h5>Lesson Notes</h5>
+                            <textarea class="form-control" rows="8" placeholder="Add your notes here..."></textarea>
+                            <button class="btn btn-primary mt-3">
+                                <i class="fas fa-save"></i> Save Notes
+                            </button>
+                        </div>
+
+                        <!-- Resources Tab -->
+                        <div class="tab-pane fade" id="resources">
+                            <h5>Resources</h5>
+                            <div class="list-group">
+                                <th:block th:each="resource : ${lesson.resources}">
+                                    <a href="#" class="list-group-item list-group-item-action">
+                                        <i class="fas fa-download"></i> 
+                                        <span th:text="${resource.name}">Resource Name</span>
+                                        <small class="text-muted d-block" th:text="${resource.type}">PDF</small>
+                                    </a>
+                                </th:block>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Complete Lesson Section -->
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <th:block th:if="${lesson.completed}">
+                        <i class="fas fa-check-circle" style="font-size: 3rem; color: #22c55e; margin-bottom: 1rem;"></i>
+                        <h5>Lesson Completed!</h5>
+                        <p class="text-muted">Great job! You've completed this lesson.</p>
+                    </th:block>
+                    <th:block th:unless="${lesson.completed}">
+                        <p class="text-muted mb-3">Have you finished watching this lesson?</p>
+                        <form method="POST" th:action="'/lesson/' + ${lesson.id} + '/complete'" class="d-inline">
+                            <button type="submit" class="btn btn-accent btn-lg">
+                                <i class="fas fa-check"></i> Mark as Complete
+                            </button>
+                        </form>
+                    </th:block>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Navigation Cards -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase mb-3">Navigation</h6>
+                    
+                    <th:block th:if="${previousLesson}">
+                        <a th:href="'/lesson/' + ${previousLesson.id}" class="btn btn-outline-primary w-100 mb-2">
+                            <i class="fas fa-arrow-left"></i> Previous Lesson
+                        </a>
+                    </th:block>
+
+                    <a th:href="'/course/' + ${course.id}" class="btn btn-outline-secondary w-100 mb-2">
+                        <i class="fas fa-book"></i> Back to Course
+                    </a>
+
+                    <th:block th:if="${nextLesson}">
+                        <a th:href="'/lesson/' + ${nextLesson.id}" class="btn btn-accent w-100">
+                            <i class="fas fa-arrow-right"></i> Next Lesson
+                        </a>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- Related Lessons -->
+            <div class="card mb-4">
+                <div class="card-header" style="background-color: #1e3a8a; color: white;">
+                    <h5 class="mb-0">Other Lessons in This Module</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <th:block th:each="otherLesson : ${moduleLessons}">
+                            <li class="mb-2">
+                                <a th:href="'/lesson/' + ${otherLesson.id}" 
+                                   class="text-decoration-none"
+                                   th:classappend="${otherLesson.id == lesson.id ? 'fw-bold' : ''}">
+                                    <span th:if="${otherLesson.completed}" class="badge badge-success me-2">
+                                        <i class="fas fa-check"></i>
+                                    </span>
+                                    <span th:text="${otherLesson.title}">Lesson</span>
+                                </a>
+                                <small class="text-muted d-block" th:text="${otherLesson.duration} + ' min'">15 min</small>
+                            </li>
+                        </th:block>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- AI Q&A Section -->
+            <div class="card">
+                <div class="card-header" style="background-color: #f97316; color: white;">
+                    <h5 class="mb-0"><i class="fas fa-robot"></i> Ask AI About This Lesson</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted">Common questions from other trainees:</small>
+                        <div class="mt-2">
+                            <a href="#" class="btn btn-sm btn-outline-primary w-100 mb-1">
+                                "Can you explain this concept further?"
+                            </a>
+                            <a href="#" class="btn btn-sm btn-outline-primary w-100 mb-1">
+                                "How does this apply in real work?"
+                            </a>
+                            <a href="#" class="btn btn-sm btn-outline-primary w-100">
+                                "What's the next step after this?"
+                            </a>
+                        </div>
+                    </div>
+                    <p class="small text-muted">Click any question or open the chat widget for personalized help.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title} + ' - FORGE'">FORGE</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --forge-primary: #1e3a8a;
+            --forge-accent: #f97316;
+            --forge-success: #22c55e;
+            --forge-warning: #f59e0b;
+            --forge-danger: #ef4444;
+            --forge-bg: #f8fafc;
+            --forge-border: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--forge-bg);
+            color: #1e293b;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--forge-primary) 0%, #1e40af 100%);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: white !important;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .navbar-brand i {
+            font-size: 1.8rem;
+            color: var(--forge-accent);
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8) !important;
+            transition: color 0.3s;
+            margin: 0 0.25rem;
+        }
+
+        .nav-link:hover {
+            color: white !important;
+        }
+
+        .nav-link.active {
+            color: var(--forge-accent) !important;
+            border-bottom: 2px solid var(--forge-accent);
+        }
+
+        .sidebar {
+            background: white;
+            border-right: 1px solid var(--forge-border);
+            min-height: calc(100vh - 60px);
+            padding: 2rem 0;
+        }
+
+        .sidebar-link {
+            display: block;
+            padding: 0.75rem 1.5rem;
+            color: #64748b;
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-link:hover,
+        .sidebar-link.active {
+            background-color: var(--forge-bg);
+            color: var(--forge-primary);
+            border-left-color: var(--forge-accent);
+            padding-left: 1.75rem;
+        }
+
+        .main-content {
+            padding: 2rem;
+        }
+
+        .card {
+            border: 1px solid var(--forge-border);
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background-color: var(--forge-primary);
+            border-color: var(--forge-primary);
+        }
+
+        .btn-primary:hover {
+            background-color: #1e3a8a;
+            border-color: #1e3a8a;
+        }
+
+        .btn-accent {
+            background-color: var(--forge-accent);
+            border-color: var(--forge-accent);
+            color: white;
+        }
+
+        .btn-accent:hover {
+            background-color: #ea580c;
+            border-color: #ea580c;
+        }
+
+        .badge-primary {
+            background-color: var(--forge-primary);
+        }
+
+        .badge-accent {
+            background-color: var(--forge-accent);
+        }
+
+        .progress {
+            height: 0.5rem;
+            background-color: var(--forge-border);
+        }
+
+        .progress-bar {
+            background-color: var(--forge-primary);
+        }
+
+        .page-title {
+            color: var(--forge-primary);
+            font-weight: 700;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+
+        .breadcrumb {
+            background-color: transparent;
+            padding: 0;
+            margin-bottom: 2rem;
+        }
+
+        .breadcrumb-item.active {
+            color: var(--forge-primary);
+            font-weight: 600;
+        }
+
+        .ai-chat-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+        }
+
+        .ai-chat-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--forge-accent) 0%, #f59e0b 100%);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ai-chat-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .ai-chat-window {
+            position: absolute;
+            bottom: 80px;
+            right: 0;
+            width: 350px;
+            height: 500px;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            display: none;
+        }
+
+        .ai-chat-window.active {
+            display: flex;
+        }
+
+        .ai-chat-header {
+            background: linear-gradient(135deg, var(--forge-accent) 0%, #f59e0b 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 1rem 1rem 0 0;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .ai-message {
+            background-color: var(--forge-bg);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            max-width: 90%;
+            align-self: flex-start;
+        }
+
+        .user-message {
+            background-color: var(--forge-primary);
+            color: white;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            max-width: 90%;
+            align-self: flex-end;
+        }
+
+        .ai-chat-input {
+            padding: 1rem;
+            border-top: 1px solid var(--forge-border);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .ai-chat-input input {
+            flex: 1;
+            border: 1px solid var(--forge-border);
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .ai-chat-input button {
+            background-color: var(--forge-accent);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .ai-chat-input button:hover {
+            background-color: #ea580c;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+            }
+
+            .ai-chat-window {
+                width: 100%;
+                height: 400px;
+                right: 0;
+                left: 0;
+                margin: 0 1rem;
+                bottom: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-hammer"></i>
+                FORGE
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/courses">Courses</a>
+                    </li>
+                    <li class="nav-item" th:if="${userRole == 'COURSE_ADMIN'}">
+                        <a class="nav-link" href="/admin/courses">Manage Courses</a>
+                    </li>
+                    <li class="nav-item" th:if="${userRole == 'PLATFORM_ADMIN'}">
+                        <a class="nav-link" href="/admin/platform">Admin Panel</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle"></i> <span th:text="${userName}">User</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/profile">Profile</a></li>
+                            <li><a class="dropdown-item" href="/settings">Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/logout">Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div class="sidebar" th:if="${showSidebar != false}" style="width: 250px;">
+            <div class="px-3">
+                <h6 class="text-muted text-uppercase fw-bold mb-3">Navigation</h6>
+                <a href="/dashboard" class="sidebar-link" th:classappend="${activePage == 'dashboard' ? 'active' : ''}">
+                    <i class="fas fa-home"></i> Dashboard
+                </a>
+                <a href="/courses" class="sidebar-link" th:classappend="${activePage == 'courses' ? 'active' : ''}">
+                    <i class="fas fa-book"></i> My Courses
+                </a>
+                <a href="/progress" class="sidebar-link" th:classappend="${activePage == 'progress' ? 'active' : ''}">
+                    <i class="fas fa-chart-line"></i> Progress
+                </a>
+                <a href="/certificates" class="sidebar-link" th:classappend="${activePage == 'certificates' ? 'active' : ''}">
+                    <i class="fas fa-certificate"></i> Certificates
+                </a>
+            </div>
+        </div>
+
+        <!-- Page Content -->
+        <div class="main-content" style="flex: 1;">
+            <th:block th:insert="${content}"></th:block>
+        </div>
+    </div>
+
+    <!-- AI Chat Widget -->
+    <div class="ai-chat-container">
+        <button class="ai-chat-button" id="aiChatToggle" onclick="toggleAIChat()">
+            <i class="fas fa-robot"></i>
+        </button>
+        <div class="ai-chat-window" id="aiChatWindow">
+            <div class="ai-chat-header">
+                <span>FORGE AI Assistant</span>
+                <button style="background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;" onclick="toggleAIChat()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="ai-chat-messages" id="aiChatMessages">
+                <div class="ai-message">
+                    <i class="fas fa-robot"></i> Hello! I'm your FORGE AI Assistant. How can I help you with your training today?
+                </div>
+            </div>
+            <div class="ai-chat-input">
+                <input type="text" id="aiChatInput" placeholder="Ask me anything..." onkeypress="handleAIChatSubmit(event)">
+                <button onclick="sendAIChatMessage()"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleAIChat() {
+            const chatWindow = document.getElementById('aiChatWindow');
+            chatWindow.classList.toggle('active');
+        }
+
+        function sendAIChatMessage() {
+            const input = document.getElementById('aiChatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const messagesContainer = document.getElementById('aiChatMessages');
+            const userMessageEl = document.createElement('div');
+            userMessageEl.className = 'user-message';
+            userMessageEl.textContent = message;
+            messagesContainer.appendChild(userMessageEl);
+            input.value = '';
+
+            // Simulate AI response
+            setTimeout(() => {
+                const aiMessageEl = document.createElement('div');
+                aiMessageEl.className = 'ai-message';
+                aiMessageEl.innerHTML = '<i class="fas fa-robot"></i> ' + getAIResponse(message);
+                messagesContainer.appendChild(aiMessageEl);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 500);
+
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function handleAIChatSubmit(event) {
+            if (event.key === 'Enter') {
+                sendAIChatMessage();
+            }
+        }
+
+        function getAIResponse(question) {
+            const responses = [
+                "That's a great question! Can you provide more context?",
+                "I found some helpful information about this topic. Would you like me to explain further?",
+                "This relates to the course material we covered. Let me help you understand it better.",
+                "I can guide you through this. What specific part would you like to focus on?"
+            ];
+            return responses[Math.floor(Math.random() * responses.length)];
+        }
+    </script>
+    <th:block th:insert="${scripts}"></th:block>
+</body>
+</html>

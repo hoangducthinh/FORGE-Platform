@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${course.title} + ' - FORGE'">Course - FORGE</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="page-title" th:text="${course.title}">Course Title</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/" style="text-decoration: none;">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/courses" style="text-decoration: none;">Courses</a></li>
+                    <li class="breadcrumb-item active" th:text="${course.title}">Course</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Course Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card p-4" style="background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); color: white;">
+                <div class="row">
+                    <div class="col-md-8">
+                        <p class="mb-2" th:text="${course.description}">Course description</p>
+                        <div class="mb-3">
+                            <span class="badge badge-light me-2" th:text="${course.difficulty}">Beginner</span>
+                            <span class="badge badge-light" th:text="${course.modules} + ' Modules'">5 Modules</span>
+                        </div>
+                        <p class="mb-0"><small>Instructor: <strong th:text="${course.instructor}">John Doe</strong></small></p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <h4 class="mb-2">Overall Progress</h4>
+                        <h2 th:text="${course.progress} + '%'">65%</h2>
+                        <div class="progress" style="height: 8px; margin-top: 1rem;">
+                            <div class="progress-bar" style="background-color: rgba(255,255,255,0.8);" th:style="'width: ' + ${course.progress} + '%'"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Modules Section -->
+            <div id="modulesAccordion" class="accordion mb-4">
+                <th:block th:each="module, iterStat : ${modules}">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" th:classappend="${iterStat.index == 0 ? '' : 'collapsed'}" 
+                                    type="button" data-bs-toggle="collapse" 
+                                    th:attr="data-bs-target='#module-' + ${module.id}, aria-expanded='${iterStat.index == 0}'">
+                                <div class="d-flex align-items-center w-100">
+                                    <div class="me-3">
+                                        <i class="fas fa-book"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <strong th:text="'Module ' + ${iterStat.count} + ': ' + ${module.title}">Module Title</strong>
+                                        <br>
+                                        <small class="text-muted" th:text="${module.lessons.size()} + ' Lessons'">5 Lessons</small>
+                                    </div>
+                                    <div class="text-end ms-3">
+                                        <div style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background-color: #f0f0f0; font-weight: bold; color: #1e3a8a;">
+                                            <span th:text="${module.progress} + '%'">65%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        </h2>
+                        <div th:id="'module-' + ${module.id}" class="accordion-collapse collapse" 
+                             th:classappend="${iterStat.index == 0 ? 'show' : ''}" data-bs-parent="#modulesAccordion">
+                            <div class="accordion-body p-0">
+                                <!-- Lessons -->
+                                <div style="max-height: 600px; overflow-y: auto;">
+                                    <th:block th:each="lesson, lessonIter : ${module.lessons}">
+                                        <div style="border-top: 1px solid #e2e8f0; padding: 1rem; hover:background-color: #f8fafc; transition: background-color 0.2s;">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="flex-grow-1">
+                                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                                        <i class="fas" th:classappend="${lesson.type == 'video' ? 'fa-play-circle' : 'fa-file-alt'}" 
+                                                           style="color: #f97316;"></i>
+                                                        <strong th:text="${lesson.title}">Lesson Title</strong>
+                                                    </div>
+                                                    <p class="text-muted small mb-0" th:text="${lesson.duration} + ' min'">15 min</p>
+                                                </div>
+                                                <div>
+                                                    <th:block th:if="${lesson.completed}">
+                                                        <i class="fas fa-check-circle" style="color: #22c55e; font-size: 1.5rem;"></i>
+                                                    </th:block>
+                                                    <th:block th:unless="${lesson.completed}">
+                                                        <a th:href="'/lesson/' + ${lesson.id}" class="btn btn-sm btn-primary">
+                                                            <i class="fas fa-play"></i> Start
+                                                        </a>
+                                                    </th:block>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </th:block>
+                                </div>
+
+                                <!-- Module Quiz -->
+                                <div style="border-top: 2px solid #e2e8f0; padding: 1rem; background-color: #f8fafc;">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <i class="fas fa-tasks" style="color: #f97316; font-size: 1.3rem; margin-right: 0.5rem;"></i>
+                                            <strong th:text="${module.title} + ' Quiz'">Module Quiz</strong>
+                                            <br>
+                                            <small class="text-muted">Test your knowledge</small>
+                                        </div>
+                                        <div>
+                                            <th:block th:if="${module.quizCompleted}">
+                                                <span class="badge badge-success">Completed: <span th:text="${module.quizScore}">85</span>%</span>
+                                            </th:block>
+                                            <th:block th:unless="${module.quizCompleted}">
+                                                <a th:href="'/quiz/' + ${module.quizId}" class="btn btn-sm btn-accent">
+                                                    <i class="fas fa-pencil"></i> Take Quiz
+                                                </a>
+                                            </th:block>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </th:block>
+            </div>
+
+            <!-- Final Exam Section -->
+            <div class="card mb-4">
+                <div class="card-header" style="background-color: #1e3a8a; color: white;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-certificate"></i> Course Certification Exam
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p>Complete all modules and pass the certification exam to earn your FORGE certificate.</p>
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle"></i> You must complete all modules before taking the exam.
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <small class="text-muted">Modules Completed</small>
+                            <h4 th:text="${modulesCompleted} + ' / ' + ${modules.size()}">3 / 5</h4>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Questions</small>
+                            <h4>50</h4>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Passing Score</small>
+                            <h4>70%</h4>
+                        </div>
+                    </div>
+                    <th:block th:if="${modulesCompleted == modules.size()}">
+                        <a href="#" class="btn btn-lg btn-accent w-100">
+                            <i class="fas fa-star"></i> Take Certification Exam
+                        </a>
+                    </th:block>
+                    <th:block th:unless="${modulesCompleted == modules.size()}">
+                        <button class="btn btn-lg btn-secondary w-100" disabled>
+                            <i class="fas fa-lock"></i> Complete All Modules to Unlock
+                        </button>
+                    </th:block>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Course Info -->
+            <div class="card mb-4">
+                <div class="card-header" style="background-color: #1e3a8a; color: white;">
+                    <h5 class="mb-0">Course Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted">Instructor</small>
+                        <p class="mb-0" th:text="${course.instructor}">John Doe</p>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <small class="text-muted">Duration</small>
+                        <p class="mb-0" th:text="${course.duration} + ' hours'">12 hours</p>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <small class="text-muted">Level</small>
+                        <p class="mb-0" th:text="${course.difficulty}">Beginner</p>
+                    </div>
+                    <hr>
+                    <div class="mb-0">
+                        <small class="text-muted">Enrolled Since</small>
+                        <p class="mb-0" th:text="${enrolledDate}">Jan 15, 2026</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resources -->
+            <div class="card mb-4">
+                <div class="card-header" style="background-color: #1e3a8a; color: white;">
+                    <h5 class="mb-0">Resources</h5>
+                </div>
+                <div class="card-body">
+                    <a href="#" class="d-block mb-2 text-decoration-none">
+                        <i class="fas fa-download"></i> Course Materials (.pdf)
+                    </a>
+                    <a href="#" class="d-block mb-2 text-decoration-none">
+                        <i class="fas fa-download"></i> Workbook (.xlsx)
+                    </a>
+                    <a href="#" class="d-block mb-2 text-decoration-none">
+                        <i class="fas fa-external-link-alt"></i> Useful Links
+                    </a>
+                </div>
+            </div>
+
+            <!-- Help -->
+            <div class="card">
+                <div class="card-header" style="background-color: #1e3a8a; color: white;">
+                    <h5 class="mb-0">Need Help?</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small mb-3">Can't understand a topic? Ask the FORGE AI Assistant in the chat widget at the bottom right.</p>
+                    <button class="btn btn-accent w-100" onclick="toggleAIChat()">
+                        <i class="fas fa-robot"></i> Chat with AI
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

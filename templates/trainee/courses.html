@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Courses - FORGE</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="page-title">Available Courses</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/" style="text-decoration: none;">Home</a></li>
+                    <li class="breadcrumb-item active">Courses</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card p-4">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" placeholder="Search courses..." id="searchInput" onkeyup="filterCourses()">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="statusFilter" onchange="filterCourses()">
+                            <option value="">All Status</option>
+                            <option value="enrolled">Enrolled</option>
+                            <option value="available">Available</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="difficultyFilter" onchange="filterCourses()">
+                            <option value="">All Levels</option>
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                            <i class="fas fa-redo"></i> Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Courses Grid -->
+    <div class="row">
+        <th:block th:each="course : ${courses}">
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="card h-100 course-card" th:data-status="${course.status}" th:data-difficulty="${course.difficulty}">
+                    <!-- Course Header Image -->
+                    <div style="height: 200px; background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: 1rem; right: 1rem;">
+                            <span class="badge badge-primary" th:text="${course.difficulty}">Beginner</span>
+                        </div>
+                        <div style="position: absolute; bottom: 1rem; left: 1rem;">
+                            <h5 style="color: white; margin: 0;" th:text="${course.title}">Course Title</h5>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <p class="text-muted small mb-2">
+                            <i class="fas fa-user"></i> <span th:text="${course.instructor}">Instructor</span>
+                        </p>
+                        <p class="card-text text-muted small" th:text="${course.description}">Course description</p>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small class="text-muted">Progress</small>
+                                <small th:text="${course.progress} + '%'">65%</small>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar" th:style="'width: ' + ${course.progress} + '%'"></div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-book"></i> <span th:text="${course.modules}">5</span> Modules
+                                </small>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-clock"></i> <span th:text="${course.duration}">12</span> hours
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <th:block th:if="${course.status == 'enrolled'}">
+                                <a th:href="'/course/' + ${course.id}" class="btn btn-sm btn-primary flex-grow-1">
+                                    <i class="fas fa-play"></i> Continue
+                                </a>
+                            </th:block>
+                            <th:block th:unless="${course.status == 'enrolled'}">
+                                <form method="POST" th:action="'/course/' + ${course.id} + '/enroll'" style="flex-grow: 1;">
+                                    <button type="submit" class="btn btn-sm btn-accent w-100">
+                                        <i class="fas fa-sign-in-alt"></i> Enroll Now
+                                    </button>
+                                </form>
+                            </th:block>
+                            <a href="#" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-info-circle"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="card-footer bg-white border-top">
+                        <small class="text-muted">
+                            <span th:if="${course.status == 'completed'}" class="badge badge-success">
+                                <i class="fas fa-check"></i> Completed
+                            </span>
+                            <span th:unless="${course.status == 'completed'}" class="text-muted">
+                                <i class="fas fa-users"></i> <span th:text="${course.students}">156</span> enrolled
+                            </span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </th:block>
+    </div>
+
+    <!-- Empty State -->
+    <div class="row" id="emptyState" style="display: none;">
+        <div class="col-12">
+            <div class="card p-5 text-center">
+                <i class="fas fa-search" style="font-size: 3rem; color: #cbd5e1; margin-bottom: 1rem;"></i>
+                <h5>No courses found</h5>
+                <p class="text-muted">Try adjusting your filters</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function filterCourses() {
+        const searchText = document.getElementById('searchInput').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const difficultyFilter = document.getElementById('difficultyFilter').value;
+        
+        const cards = document.querySelectorAll('.course-card');
+        let visibleCount = 0;
+
+        cards.forEach(card => {
+            const title = card.querySelector('.card-body').textContent.toLowerCase();
+            const status = card.dataset.status;
+            const difficulty = card.dataset.difficulty;
+
+            const matchesSearch = title.includes(searchText);
+            const matchesStatus = !statusFilter || status === statusFilter;
+            const matchesDifficulty = !difficultyFilter || difficulty === difficultyFilter;
+
+            const shouldShow = matchesSearch && matchesStatus && matchesDifficulty;
+            card.parentElement.style.display = shouldShow ? 'block' : 'none';
+            
+            if (shouldShow) visibleCount++;
+        });
+
+        document.getElementById('emptyState').style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+
+    function resetFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('difficultyFilter').value = '';
+        filterCourses();
+    }
+</script>
+
+</body>
+</html>

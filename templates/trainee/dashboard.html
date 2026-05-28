@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - FORGE</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="page-title">Welcome, <span th:text="${userName}">Trainee</span>!</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/" style="text-decoration: none;">Home</a></li>
+                    <li class="breadcrumb-item active">Dashboard</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Active Courses</p>
+                        <h3 th:text="${activeCourses}">3</h3>
+                    </div>
+                    <i class="fas fa-book" style="font-size: 2rem; color: #1e3a8a; opacity: 0.2;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Overall Progress</p>
+                        <h3 th:text="${overallProgress} + '%'">65%</h3>
+                    </div>
+                    <i class="fas fa-chart-line" style="font-size: 2rem; color: #22c55e; opacity: 0.2;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Certificates</p>
+                        <h3 th:text="${certificatesEarned}">2</h3>
+                    </div>
+                    <i class="fas fa-certificate" style="font-size: 2rem; color: #f97316; opacity: 0.2;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Hours Learned</p>
+                        <h3 th:text="${hoursLearned}">24.5</h3>
+                    </div>
+                    <i class="fas fa-clock" style="font-size: 2rem; color: #f59e0b; opacity: 0.2;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Courses -->
+    <div class="row">
+        <div class="col-lg-8">
+            <h3 class="mb-3" style="color: #1e3a8a; font-weight: 700;">Enrolled Courses</h3>
+            <div class="row">
+                <th:block th:each="course : ${courses}">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title" th:text="${course.title}">Course Title</h5>
+                                <p class="card-text text-muted" th:text="${course.description}">Course description</p>
+                                <p class="mb-2">
+                                    <span class="badge badge-primary" th:text="${course.instructor}">Instructor Name</span>
+                                </p>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <small>Progress</small>
+                                        <small th:text="${course.progress} + '%'">65%</small>
+                                    </div>
+                                    <div class="progress">
+                                        <div class="progress-bar" th:style="'width: ' + ${course.progress} + '%'"></div>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a th:href="'/course/' + ${course.id}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-play"></i> Continue
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </th:block>
+            </div>
+        </div>
+
+        <!-- Upcoming Assignments -->
+        <div class="col-lg-4">
+            <h3 class="mb-3" style="color: #1e3a8a; font-weight: 700;">Upcoming Assignments</h3>
+            <div class="card">
+                <div class="card-body">
+                    <th:block th:each="assignment : ${upcomingAssignments}">
+                        <div class="mb-3" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem;">
+                            <h6 class="mb-1" th:text="${assignment.title}">Assignment Title</h6>
+                            <p class="text-muted small mb-2">
+                                <i class="fas fa-book"></i> <span th:text="${assignment.course}">Course Name</span>
+                            </p>
+                            <p class="text-muted small mb-2">
+                                <i class="fas fa-calendar"></i> Due: <span th:text="${assignment.dueDate}">Feb 28, 2026</span>
+                            </p>
+                            <span class="badge badge-warning" th:classappend="${assignment.status == 'overdue' ? 'badge-danger' : ''}" 
+                                  th:text="${assignment.status}">pending</span>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- Learning Recommendations -->
+            <h3 class="mb-3 mt-4" style="color: #1e3a8a; font-weight: 700;">AI Recommendations</h3>
+            <div class="card">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <i class="fas fa-lightbulb" style="color: #f97316;"></i>
+                        <p class="mt-2 small">Based on your performance, we recommend spending more time on "Advanced Module 3"</p>
+                    </div>
+                    <div class="mb-3">
+                        <i class="fas fa-star" style="color: #f97316;"></i>
+                        <p class="mt-2 small">You're doing great! Consider taking the certification exam next week.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
