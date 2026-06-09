@@ -23,7 +23,7 @@ export function SimulatorLesson({
   lessonTitle,
   lessonContent,
   scenarioType = 'random',
-  productName = 'CloudSync Pro',
+  productName = 'Căn hộ cao cấp',
   onLessonComplete,
 }: SimulatorLessonProps) {
   const [simulationStarted, setSimulationStarted] = useState(false);
@@ -38,15 +38,7 @@ export function SimulatorLesson({
   const scenarioOptions: CustomerScenario[] = ['skeptical', 'warm_lead', 'random'];
 
   const getInitialMessage = (): string => {
-    const messages = {
-      skeptical:
-        "Hi, thanks for reaching out about CloudSync Pro. I've heard some buzz about it, but honestly, I'm skeptical. We're already using another tool and it's working fine. Why would we switch?",
-      warm_lead:
-        "Hey! Thanks for taking the time to chat with me. I've been looking for a better collaboration tool for my team. What makes CloudSync Pro special compared to what's out there?",
-      random:
-        "Sure, tell me about this product you're pitching. Why should I care about CloudSync Pro?",
-    };
-    return messages[currentScenario];
+    return scenario.initialObjection || "Chào bạn, tôi muốn tìm hiểu thêm về dự án.";
   };
 
   const handleStartSimulation = (chosen?: CustomerScenario) => {

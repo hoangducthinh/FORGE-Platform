@@ -11,6 +11,8 @@ import { CustomerAvatarCard } from './CustomerAvatarCard';
 interface ConversationSimulatorProps {
   scenario: CustomerScenario;
   productName: string;
+  productDescription?: string;
+  productPrice?: string;
   initialMessage: string;
   onConversationUpdate: (messages: ConversationMessage[]) => void;
   onMetricsUpdate?: (metrics: any) => void;
@@ -20,6 +22,8 @@ interface ConversationSimulatorProps {
 export function ConversationSimulator({
   scenario,
   productName,
+  productDescription,
+  productPrice,
   initialMessage,
   onConversationUpdate,
   onMetricsUpdate,
@@ -30,7 +34,10 @@ export function ConversationSimulator({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [turnScore, setTurnScore] = useState<number>(0);
   const [feedback, setFeedback] = useState<string>('');
+  const [salesAnalysis, setSalesAnalysis] = useState<any>(null);
   const [turnScores, setTurnScores] = useState<number[]>([]);
+  const [sessionScore, setSessionScore] = useState(50);
+  const [turnCount, setTurnCount] = useState(1);
   const [metrics, setMetrics] = useState({
     convictionRate: scenario === 'warm_lead' ? 40 : scenario === 'skeptical' ? 20 : 30,
     pitchQuality: 0,
@@ -130,6 +137,8 @@ export function ConversationSimulator({
     setMessages(updatedMessages);
     setIsProcessing(true);
 
+    const currentTurn = turnCount;
+
     try {
       // Send to API for customer response
       const response = await fetch('/api/sales-simulator/customer-response', {
@@ -140,8 +149,12 @@ export function ConversationSimulator({
         body: JSON.stringify({
           scenario,
           productName,
+          productDescription,
+          productPrice,
           conversationHistory: updatedMessages,
           traineMessage: transcript,
+          turnCount: currentTurn,
+          sessionScore,
         }),
       });
 
@@ -151,21 +164,27 @@ export function ConversationSimulator({
 
       const data = await response.json();
 
-      // Extract score and feedback
-      const score = data.score || data.convictionDelta || 50;
-      const feedbackText = data.feedback || 'Keep going!';
+      // Extract score, feedback and salesAnalysis
+      const score = data.score ?? 50;
+      const feedbackText = data.feedback || 'Hãy tiếp tục thuyết phục khách hàng!';
 
-      // Update turn score and turn scores array
+      // Update turn score, session score and turn count
       setTurnScore(score);
       setFeedback(feedbackText);
+      setSalesAnalysis(data.salesAnalysis ?? null);
       const newTurnScores = [...turnScores, score];
       setTurnScores(newTurnScores);
+      // Running session score = average of all turn scores so far
+      const newSessionScore = Math.round(newTurnScores.reduce((a, b) => a + b, 0) / newTurnScores.length);
+      setSessionScore(newSessionScore);
+      setTurnCount(prev => prev + 1);
 
-      // Add customer's response
+      // Add customer's response — prefer new field customerReply, fall back to legacy response
+      const replyContent = data.customerReply || data.response || 'Bạn có thể nói thêm về dự án không?';
       const customerResponse: ConversationMessage = {
         id: `msg-${Date.now()}-${Math.random()}`,
         role: 'customer',
-        content: data.response,
+        content: replyContent,
         timestamp: new Date(),
       };
 
@@ -193,7 +212,7 @@ export function ConversationSimulator({
       const fallbackResponse: ConversationMessage = {
         id: `msg-${Date.now()}-${Math.random()}`,
         role: 'customer',
-        content: "That's interesting. Can you tell me more about how this would specifically help our team?",
+        content: "Dự án này nghe cũng được, bạn có thể chia sẻ thêm thông tin chi tiết về sản phẩm này không?",
         timestamp: new Date(),
       };
 
@@ -219,10 +238,10 @@ export function ConversationSimulator({
   };
 
   const scenarioLabel = {
-    skeptical: 'Skeptical Customer',
-    warm_lead: 'Warm Lead',
-    random: 'Random Customer',
-  }[scenario];
+    skeptical: 'Khách hàng khó tính',
+    warm_lead: 'Người mua nhà lần đầu',
+    random: 'Nhà đầu tư',
+  }[scenario] || 'Khách hàng';
 
   const finalSessionScore = calculateFinalSessionScore(turnScores);
 

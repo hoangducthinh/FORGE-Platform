@@ -11,7 +11,7 @@ export interface SpeechErrorEvent {
 }
 
 export class SpeechToTextConverter {
-  private recognition: SpeechRecognition | null = null;
+  private recognition: any = null;
   private isListening = false;
   private transcript = '';
   private finalTranscript = '';

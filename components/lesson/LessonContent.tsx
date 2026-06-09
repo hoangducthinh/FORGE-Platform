@@ -18,6 +18,39 @@ interface LessonContentProps {
   lessons: Lesson[];
 }
 
+const simulatorData: Record<string, { productName: string; productDescription: string; productPrice: string; scenarioDescription: string }> = {
+  l11: {
+    productName: "Căn hộ The Emerald 68",
+    productDescription: "Căn hộ cao cấp tại Đại lộ Bình Dương, Thuận An, Bình Dương. Tiện ích 5 sao, hồ bơi tràn bờ, gym, công viên nội khu, ngay trung tâm.",
+    productPrice: "2.5 - 4.5 tỷ VNĐ",
+    scenarioDescription: "Khách hàng đang quan tâm tìm kiếm một căn hộ cao cấp cho gia đình hoặc đầu tư tại Bình Dương. Hãy tư vấn và thuyết phục khách hàng."
+  },
+  l12: {
+    productName: "Nhà phố Verosa Park",
+    productDescription: "Nhà phố compound 1 trệt 3 lầu tại Đường Liên Phường, Quận 9 cũ, TP.HCM. Sân vườn riêng, gara ô tô, an ninh khép kín 24/7.",
+    productPrice: "10.5 - 18 tỷ VNĐ",
+    scenarioDescription: "Khách hàng là gia đình trẻ có con nhỏ đang tìm kiếm không gian sống rộng rãi, an ninh tốt. Hãy nhấn mạnh vào không gian sống compound an toàn."
+  },
+  l13: {
+    productName: "Biệt thự Vinhomes Central Park",
+    productDescription: "Biệt thự song lập và đơn lập đẳng cấp tại Bình Thạnh, TP.HCM. Sân vườn, hồ bơi riêng, Landmark 81, công viên 14ha ven sông Sài Gòn.",
+    productPrice: "35 - 80 tỷ VNĐ",
+    scenarioDescription: "Khách hàng là doanh nhân thành đạt đang tìm kiếm không gian sống đẳng cấp, biệt lập. Hãy nhấn mạnh vào giá trị thương hiệu và vị trí độc tôn."
+  },
+  l14: {
+    productName: "Đất nền Long Thành",
+    productDescription: "Đất nền phân lô đã có sổ đỏ tại Long Thành, Đồng Nai. Gần sân bay quốc tế Long Thành, hạ tầng hoàn thiện, đường nhựa 12-16m.",
+    productPrice: "15 - 25 triệu/m²",
+    scenarioDescription: "Khách hàng là nhà đầu tư đang tìm kiếm cơ hội sinh lời trung và dài hạn. Hãy phân tích tiềm năng từ quy hoạch sân bay và hạ tầng giao thông."
+  },
+  l15: {
+    productName: "Shophouse Vinhomes Grand Park",
+    productDescription: "Shophouse 1 trệt 3 lầu tại Vinhomes Grand Park, Quận 9 cũ, TP.HCM. Vị trí mặt tiền đường lớn, vừa ở vừa kinh doanh với cộng đồng 50,000+ cư dân.",
+    productPrice: "12 - 25 tỷ VNĐ",
+    scenarioDescription: "Khách hàng là chủ doanh nghiệp nhỏ muốn mua mặt bằng kinh doanh kết hợp nhà ở. Hãy nhấn mạnh vào tiềm năng kinh doanh và lượng cư dân đông đúc."
+  }
+};
+
 export default function LessonContent({
   lesson,
   course,
@@ -66,23 +99,14 @@ export default function LessonContent({
             <Progress value={progressPercent} className="h-2 dark:bg-slate-700" />
           </div>
 
-          {lesson.id === 'l5' || lesson.id === 'l11' ? (
+          {simulatorData[lesson.id] ? (
             <div className="w-full mb-8">
-              {lesson.id === 'l5' ? (
-                <AISalesSimulator
-                  productName="EcoBot Smart Water Bottle"
-                  productDescription="AI-powered hydration tracking, temperature control, 48-hour cold/hot retention, 100% recycled materials, app integration"
-                  productPrice="$89.99"
-                  scenarioDescription="You're a sales representative for EcoBot. The customer is skeptical about the price. Your goal is to convince them of the value and close the sale."
-                />
-              ) : (
-                <AISalesSimulator
-                  productName="Truffle Wagyu Ribeye Steak"
-                  productDescription="A5 Japanese Wagyu, infused with white truffle butter, served with Himalayan salt and rosemary reduction, sourced from sustainable farms"
-                  productPrice="$150.00"
-                  scenarioDescription="You're a waiter at a premium restaurant. The customer is a food enthusiast wanting to know about the ingredients and preparation before ordering. Your goal is to convince them to try this signature dish."
-                />
-              )}
+              <AISalesSimulator
+                productName={simulatorData[lesson.id].productName}
+                productDescription={simulatorData[lesson.id].productDescription}
+                productPrice={simulatorData[lesson.id].productPrice}
+                scenarioDescription={simulatorData[lesson.id].scenarioDescription}
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, language = 'en-US' } = await request.json();
+    const { text, language = 'vi-VN' } = await request.json();
 
     console.log('[TTS] ========== REQUEST START ==========');
     console.log('[TTS] Text (first 100 chars):', text?.substring(0, 100));
-    console.log('[TTS] Language:', language);
 
     if (!text || text.trim().length === 0) {
       console.error('[TTS] No text provided');
@@ -16,14 +15,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    const ttsModel = process.env.GEMINI_TTS_MODEL || 'gemini-2.5-flash-preview-tts';
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const voiceId = process.env.ELEVENLABS_VOICE_ID;
 
-    if (!apiKey) {
-      console.error('[TTS] GEMINI_API_KEY not configured');
+    if (!apiKey || !voiceId) {
+      console.error('[TTS] ELEVENLABS_API_KEY or ELEVENLABS_VOICE_ID not configured');
       return NextResponse.json(
         {
-          error: 'GEMINI_API_KEY not configured',
+          error: 'ElevenLabs credentials not configured',
           audioBase64: '',
           fallback: true,
         },
@@ -31,43 +30,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[TTS] Calling Gemini TTS API');
-    console.log('[TTS] Model:', ttsModel);
-    console.log('[TTS] API Key present:', !!apiKey);
+    console.log('[TTS] Calling ElevenLabs TTS API');
 
-    // Call Gemini TTS API with audio generation
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${apiKey}`;
-
+    const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+    
+    // We try eleven_flash_v2_5 for speed and low cost, fallback to turbo/multilingual if needed.
     const requestBody = {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: text,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: language === 'vi-VN' ? 'Kore' : 'Puck',
-            },
-          },
-        },
-      },
+      text,
+      model_id: 'eleven_flash_v2_5',
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.75,
+        style: 0.1,
+        use_speaker_boost: true,
+      }
     };
 
-    console.log('[TTS] Sending request to:', geminiUrl.split('?')[0]);
-    console.log('[TTS] Request body:', JSON.stringify(requestBody, null, 2));
-
-    const response = await fetch(geminiUrl, {
+    const response = await fetch(elevenLabsUrl, {
       method: 'POST',
       headers: {
+        'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
+        'xi-api-key': apiKey,
       },
       body: JSON.stringify(requestBody),
     });
@@ -77,6 +61,19 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[TTS] API Error:', response.status, errorText);
+
+      // User reminder: For ElevenLabs free accounts, library voices are not allowed via API.
+      // Please use a default/cloned voice ID in ELEVENLABS_VOICE_ID, or upgrade your plan.
+      if (response.status === 402 || errorText.includes('paid_plan_required')) {
+        return NextResponse.json(
+          {
+            error: 'ELEVENLABS_VOICE_NOT_AVAILABLE_FOR_FREE_PLAN',
+            audioBase64: '',
+            fallback: true,
+          },
+          { status: 200 } // Return 200 to prevent frontend crash, handle gracefully via fallback
+        );
+      }
 
       return NextResponse.json(
         {
@@ -88,64 +85,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
-    console.log('[TTS] Response received from Gemini');
-    console.log('[TTS] Has candidates:', !!data?.candidates?.length);
-    console.log(
-      '[TTS] Has audio data:',
-      !!data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
-    );
-    console.log(
-      '[TTS] Audio mime type:',
-      data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType
-    );
-    console.log(
-      '[TTS] Audio base64 length:',
-      data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data?.length || 0
-    );
-
-    // Extract audio from Gemini TTS response
-    const audioContent =
-      data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || '';
-    const mimeType =
-      data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType || 'audio/wav';
-
-    if (!audioContent) {
-      console.warn('[TTS] No audio content in response');
-      console.log('[TTS] Response keys:', Object.keys(data));
-      if (data.candidates) {
-        console.log('[TTS] Candidates:', JSON.stringify(data.candidates, null, 2));
-      }
-
-      return NextResponse.json(
-        {
-          error: 'No audio content generated',
-          audioBase64: '',
-          fallback: true,
-        },
-        { status: 200 }
-      );
-    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const audioBase64 = buffer.toString('base64');
+    const mimeType = 'audio/mpeg';
 
     console.log('[TTS] ✅ Audio generated successfully');
-    console.log('[TTS] Audio size:', audioContent.length, 'bytes');
-    console.log('[TTS] MIME type:', mimeType);
+    console.log('[TTS] Audio size:', audioBase64.length, 'bytes');
     console.log('[TTS] ========== REQUEST SUCCESS ==========');
 
     return NextResponse.json({
-      audioBase64: audioContent,
-      mimeType: mimeType,
+      audioBase64,
+      mimeType,
       fallback: false,
-      language: language,
+      language,
     });
   } catch (error) {
     console.error('[TTS] ❌ EXCEPTION:', error);
-    console.error('[TTS] Error type:', typeof error);
-    if (error instanceof Error) {
-      console.error('[TTS] Error message:', error.message);
-      console.error('[TTS] Error stack:', error.stack);
-    }
-
     return NextResponse.json(
       {
         error: 'TTS exception',

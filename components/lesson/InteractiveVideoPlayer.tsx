@@ -21,7 +21,7 @@ export default function InteractiveVideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>();
+  const controlsTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
     const video = videoRef.current;

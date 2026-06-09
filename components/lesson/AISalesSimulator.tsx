@@ -7,7 +7,8 @@ import { ModeToggle } from '@/components/sales-simulator/ModeToggle';
 import { TextChatInput } from '@/components/sales-simulator/TextChatInput';
 import { CustomerAvatarCard } from '@/components/sales-simulator/CustomerAvatarCard';
 import {
-  autoPlayAIMessage,
+  requestGeminiTTS,
+  playGeneratedAudio,
   stopCurrentAudio,
   markUserInteraction,
   manualPlayAudio,
@@ -82,7 +83,7 @@ export default function AISalesSimulator({
     conversationEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation]);
 
-  // Auto-play new AI messages with Gemini TTS
+  // Auto-play new AI messages with TTS
   useEffect(() => {
     if (conversation.length === 0) return;
 
@@ -91,34 +92,42 @@ export default function AISalesSimulator({
     if (
       lastMessage.role === 'ai' &&
       lastMessage.id !== lastSpokenMessageIdRef.current &&
-      lastMessage.content
+      lastMessage.content &&
+      !lastMessage.audioBase64
     ) {
-      const timer = setTimeout(() => {
-        console.log('[AISalesSimulator] Auto-playing message:', lastMessage.id);
-        setIsSpeaking(true);
+      lastSpokenMessageIdRef.current = lastMessage.id || '';
 
-        autoPlayAIMessage(lastMessage.content, 'vi-VN', (error) => {
-          console.error('[AISalesSimulator] Message auto-play failed:', error);
-          setIsSpeaking(false);
-        }).then((success) => {
-          // Đánh dấu đã xử lý message này để tránh re-render phát lại
-          lastSpokenMessageIdRef.current = lastMessage.id || '';
+      const processTTS = async () => {
+        try {
+          console.log('[AISalesSimulator] Requesting TTS for message:', lastMessage.id);
+          
+          const ttsResult = await requestGeminiTTS(lastMessage.content, 'vi-VN');
+          
+          if (!ttsResult.error && ttsResult.audioBase64) {
+            // Update message with audio so it can be replayed manually
+            setConversation(prev => prev.map(msg => 
+              msg.id === lastMessage.id 
+                ? { ...msg, audioBase64: ttsResult.audioBase64, mimeType: ttsResult.mimeType || 'audio/mpeg' } 
+                : msg
+            ));
 
-          if (success) {
-            console.log('[AISalesSimulator] Message auto-played:', lastMessage.id);
-
-            // Simulate speaking duration
-            const speakingDuration = Math.min(lastMessage.content.length * 50, 10000);
-            setTimeout(() => {
+            // Start playback
+            setIsSpeaking(true);
+            try {
+              await playGeneratedAudio(ttsResult.audioBase64, ttsResult.mimeType || 'audio/mpeg', false);
+            } catch (playErr) {
+              console.warn('[AISalesSimulator] Auto-play blocked or failed', playErr);
+            } finally {
               setIsSpeaking(false);
-            }, speakingDuration);
-          } else {
-            setIsSpeaking(false);
+            }
           }
-        });
-      }, 300);
+        } catch (err) {
+          console.error('[AISalesSimulator] Failed to process TTS:', err);
+          setIsSpeaking(false);
+        }
+      };
 
-      return () => clearTimeout(timer);
+      processTTS();
     }
   }, [conversation]);
 
@@ -197,7 +206,13 @@ export default function AISalesSimulator({
       await getAIResponse(userMessage);
     } catch (error) {
       console.error('Transcription error:', error);
-      setFeedback('Failed to process audio. Please try again.');
+      const isNetworkError = error instanceof Error && (error.message.includes('fetch failed') || error.message.includes('network'));
+      setErrorMessage(
+        isNetworkError
+          ? 'Không thể kết nối đến máy chủ AI. Vui lòng kiểm tra mạng hoặc chuyển sang chế độ Text.'
+          : 'Không thể xử lý giọng nói. Vui lòng thử lại hoặc chuyển sang chế độ Text.'
+      );
+      setMode('text'); // Auto switch to text mode on transcription failure
     } finally {
       setIsLoading(false);
     }
@@ -228,8 +243,8 @@ export default function AISalesSimulator({
       if (!response.ok) throw new Error('AI response failed');
 
       const data = await response.json();
-      const aiMessage = data.response;
-      const scoreUpdate = data.score || (finalSessionScore + data.convictionDelta * 2);
+      const aiMessage = data.customerReply || data.response;
+      const scoreUpdate = data.score !== undefined ? data.score : (finalSessionScore + data.convictionDelta * 2);
       const feedbackText = data.feedback || 'Good effort!';
       const stage = data.stage || 'early';
       const outcome = data.outcome || null;
@@ -259,33 +274,12 @@ export default function AISalesSimulator({
         localStorage.setItem('forge-simulator-history', JSON.stringify(history));
       }
 
-      // Get TTS audio
-      let audioBase64 = '';
-      let mimeType = '';
-      try {
-        const ttsResponse = await fetch('/api/text-to-speech', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: aiMessage, language: 'vi-VN' }),
-        });
-
-        if (ttsResponse.ok) {
-          const ttsData = await ttsResponse.json();
-          audioBase64 = ttsData.audioBase64 || '';
-          mimeType = ttsData.mimeType || 'audio/L16;codec=pcm;rate=24000';
-        }
-      } catch (ttsError) {
-        console.warn('[AISalesSimulator] TTS request failed:', ttsError);
-      }
-
-      // Add AI message with audio
+      // Add AI message WITHOUT audio first (updates UI instantly)
       const newAIMessage: ConversationMessage = {
         role: 'ai',
         content: aiMessage,
         timestamp: new Date(),
         id: `msg-${Date.now()}-${Math.random()}`,
-        audioBase64,
-        mimeType,
       };
       setConversation((prev) => [...prev, newAIMessage]);
       setTranscription('');
@@ -293,6 +287,7 @@ export default function AISalesSimulator({
     } catch (error) {
       console.error('AI response error:', error);
       setFeedback('Failed to get AI response. Please try again.');
+      setErrorMessage('Hệ thống AI gặp sự cố. Vui lòng gửi lại tin nhắn của bạn.');
     } finally {
       setIsLoading(false);
     }
@@ -433,7 +428,7 @@ export default function AISalesSimulator({
                     handleManualAudioPlay(
                       msg.id!,
                       msg.audioBase64!,
-                      msg.mimeType || 'audio/L16;codec=pcm;rate=24000'
+                      msg.mimeType || 'audio/mpeg'
                     )
                   }
                   disabled={playingAudioId === msg.id}

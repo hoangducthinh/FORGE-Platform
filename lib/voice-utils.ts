@@ -126,7 +126,7 @@ function pcmToWavBlob(pcmData: Uint8Array, sampleRate: number = 24000): Blob {
  */
 export function playGeneratedAudio(
   audioBase64: string,
-  mimeType: string = 'audio/L16;codec=pcm;rate=24000',
+  mimeType: string = 'audio/mpeg',
   skipInteractionCheck: boolean = false
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -312,7 +312,7 @@ export function isAudioPlaying(): boolean {
  */
 export async function manualPlayAudio(
   audioBase64: string,
-  mimeType: string = 'audio/L16;codec=pcm;rate=24000'
+  mimeType: string = 'audio/mpeg'
 ): Promise<void> {
   markUserInteraction();
   return playGeneratedAudio(audioBase64, mimeType, true); // skip check since user explicitly clicked
@@ -380,7 +380,7 @@ export async function autoPlayAIMessage(
   text: string,
   language: string = 'vi-VN',
   onError?: (error: string) => void
-): Promise<boolean> {
+): Promise<{ success: boolean; audioBase64?: string; mimeType?: string }> {
   try {
     const resolvedLanguage = language || detectLanguage(text);
 
@@ -397,7 +397,7 @@ export async function autoPlayAIMessage(
       if (onError) {
         onError(ttsResult.error);
       }
-      return false;
+      return { success: false };
     }
 
     if (ttsResult.fallback || !ttsResult.audioBase64) {
@@ -405,7 +405,7 @@ export async function autoPlayAIMessage(
       if (onError) {
         onError('Audio generation unavailable');
       }
-      return false;
+      return { success: false };
     }
 
     console.log('[AutoPlay] Attempting to play audio');
@@ -414,20 +414,22 @@ export async function autoPlayAIMessage(
     try {
       await playGeneratedAudio(
         ttsResult.audioBase64,
-        ttsResult.mimeType || 'audio/L16;codec=pcm;rate=24000',
+        ttsResult.mimeType || 'audio/mpeg',
         false // require user interaction
       );
       console.log('[AutoPlay] ✅ Audio playback completed');
-      return true;
+      return { success: true, audioBase64: ttsResult.audioBase64, mimeType: ttsResult.mimeType };
     } catch (playError) {
       if (
         playError instanceof Error &&
         playError.message.includes('user interaction')
       ) {
         console.log('[AutoPlay] Autoplay blocked by browser policy - waiting for user interaction');
-        return false;
+      } else {
+        console.error('[AutoPlay] Playback error:', playError);
       }
-      throw playError;
+      // Return audio data anyway so it can be saved for manual playback
+      return { success: false, audioBase64: ttsResult.audioBase64, mimeType: ttsResult.mimeType };
     }
   } catch (error) {
     console.error('[AutoPlay] Exception:', error);
@@ -435,7 +437,7 @@ export async function autoPlayAIMessage(
     if (onError) {
       onError(errorMsg);
     }
-    return false;
+    return { success: false };
   }
 }
 
