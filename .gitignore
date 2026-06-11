@@ -6,7 +6,16 @@ __v0_jsx-dev-runtime.ts
 # Common ignores
 node_modules/
 .next/
-.env*.local
+.env
+.env.local
+.env.*.local
+.vercel
 .DS_Store
 tsconfig.tsbuildinfo
 PROJECT_OVERVIEW_VI.md
+
+# Logs and Media
+*.log
+*.mp3
+*.wav
+*.webm
