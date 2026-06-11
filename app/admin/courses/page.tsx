@@ -2,22 +2,37 @@
 
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/layout/Navbar';
-import { AIChat } from '@/components/layout/AIChat';
-import { mockCourses, mockUserProgress } from '@/lib/mock-data';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import Link from 'next/link';
-import { Plus, Edit2, Trash2, BarChart3, Users } from 'lucide-react';
-import { useState } from 'react';
+import { Plus, Edit2, Trash2, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import type { Course } from '@/lib/supabase/database.types';
 
 export default function CourseAdminPage() {
+  const supabase = createClient();
   const [showNewCourseForm, setShowNewCourseForm] = useState(false);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [newCourse, setNewCourse] = useState({ title: '', description: '', category: '' });
 
-  const courses = mockCourses.filter((c) => c.status !== 'archived');
+  useEffect(() => {
+    async function loadCourses() {
+      setIsLoading(true);
+      try {
+        const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
+        if (data) setCourses(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadCourses();
+  }, [supabase]);
 
   return (
-    <ProtectedRoute requiredRoles={['course_admin', 'platform_admin']}>
+    <ProtectedRoute requiredRoles={['manager', 'admin']}>
       <div className="min-h-screen bg-gray-50">
         <Navbar />
 
@@ -94,19 +109,19 @@ export default function CourseAdminPage() {
             {[
               { label: 'Total Courses', value: courses.length, color: 'blue' },
               {
-                label: 'Total Enrollment',
-                value: mockUserProgress.length,
+                label: 'Published Courses',
+                value: courses.filter((c) => c.is_published).length,
                 color: 'purple',
               },
               {
-                label: 'Avg Completion',
-                value: '45%',
+                label: 'Draft Courses',
+                value: courses.filter((c) => !c.is_published).length,
                 color: 'green',
               },
             ].map((stat, i) => (
               <div key={i} className="bg-white rounded-lg border border-gray-200 p-6">
                 <p className="text-gray-600 text-sm mb-2">{stat.label}</p>
-                <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value}</p>
               </div>
             ))}
           </div>
@@ -126,72 +141,52 @@ export default function CourseAdminPage() {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">
-                    Enrollments
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {courses.map((course) => {
-                  const enrollments = mockUserProgress.filter((p) => p.courseId === course.id).length;
-                  return (
-                    <tr key={course.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4">
-                        <h3 className="font-medium text-gray-900">{course.title}</h3>
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-1">
-                          {course.description}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{course.category}</td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                            course.status === 'published'
-                              ? 'bg-green-100 text-green-700'
-                              : course.status === 'draft'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
+                {courses.map((course) => (
+                  <tr key={course.id} className="hover:bg-gray-50 transition">
+                    <td className="px-6 py-4">
+                      <h3 className="font-medium text-gray-900">{course.title}</h3>
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-1">
+                        {course.description}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{course.category}</td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                          course.is_published
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-yellow-100 text-yellow-700'
+                        }`}
+                      >
+                        {course.is_published ? 'Published' : 'Draft'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" className="gap-1">
+                          <Edit2 className="w-4 h-4" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700"
                         >
-                          {course.status.charAt(0).toUpperCase() + course.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Users className="w-4 h-4" />
-                          {enrollments}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" className="gap-1">
-                            <BarChart3 className="w-4 h-4" />
-                            Analytics
-                          </Button>
-                          <Button size="sm" variant="outline" className="gap-1">
-                            <Edit2 className="w-4 h-4" />
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </main>
-
-        <AIChat />
       </div>
     </ProtectedRoute>
   );

@@ -4,23 +4,74 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/layout/Navbar';
 import { AIChat } from '@/components/layout/AIChat';
 import { useAuth } from '@/lib/auth-context';
-import { mockUserProgress, mockCourses } from '@/lib/mock-data';
+import { createClient } from '@/lib/supabase/client';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { BookOpen, Clock, Award, TrendingUp } from 'lucide-react';
+import { BookOpen, Clock, Award, TrendingUp, Plus, Settings, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SimulatorProgressChart } from '@/components/simulator/SimulatorProgressChart';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, profile, role, isPremium } = useAuth();
+  const supabase = createClient();
+  
+  const [courseDetails, setCourseDetails] = useState<any[]>([]);
+  const [avgProgress, setAvgProgress] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Get user's enrolled courses
-  const enrolledCourses = mockUserProgress.filter((p) => p.userId === user?.id);
-  const courseDetails = enrolledCourses.map((progress) => ({
-    ...progress,
-    course: mockCourses.find((c) => c.id === progress.courseId),
-  }));
+  useEffect(() => {
+    async function loadDashboardData() {
+      if (!user) return;
+      setIsLoading(true);
+      try {
+        // Fetch enrollments with course details (Note: assuming FK relationship exists, or we fetch manually)
+        const { data: enrollments, error: enrollmentsError } = await (supabase as any)
+          .from('course_enrollments')
+          .select('course_id, courses (*)')
+          .eq('user_id', user.id);
+          
+        if (enrollmentsError) throw enrollmentsError;
+        
+        // Fetch user progress
+        const { data: progressData, error: progressError } = await (supabase as any)
+          .from('user_course_progress')
+          .select('*')
+          .eq('user_id', user.id);
+          
+        if (progressError) throw progressError;
+
+        // Process data
+        const mappedCourses = (enrollments || []).map((e: any) => {
+          // Depending on whether it's a join or embedded object, e.courses might be a single object or array
+          const course = Array.isArray(e.courses) ? e.courses[0] : e.courses;
+          const progress = progressData?.find((p: any) => p.course_id === e.course_id);
+          return {
+            courseId: e.course_id,
+            course: course,
+            progressPercentage: progress ? progress.progress_percentage : 0,
+            status: progress?.progress_percentage === 100 ? 'completed' : 'in_progress'
+          };
+        });
+        
+        setCourseDetails(mappedCourses);
+        
+        if (mappedCourses.length > 0) {
+          const totalProgress = mappedCourses.reduce((sum: number, item: any) => sum + item.progressPercentage, 0);
+          setAvgProgress(Math.round(totalProgress / mappedCourses.length));
+          setCompletedCount(mappedCourses.filter((m: any) => m.status === 'completed').length);
+        }
+        
+      } catch (err) {
+        console.error('Error loading dashboard data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadDashboardData();
+  }, [user, supabase]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -44,9 +95,55 @@ export default function DashboardPage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <motion.div initial="hidden" animate="visible" variants={containerVariants}>
             {/* Welcome Header */}
-            <motion.div variants={itemVariants} className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Welcome back, {user?.name}!</h1>
-              <p className="text-gray-600 dark:text-gray-400">Continue your learning journey and master new skills.</p>
+            <motion.div variants={itemVariants}>
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                  Chào mừng trở lại, {profile?.full_name || user?.email?.split('@')[0]}
+                  {isPremium && <span className="bg-gradient-to-r from-orange-400 to-red-500 text-white text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">Premium</span>}
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  Tiếp tục hành trình học tập và rèn luyện kỹ năng của bạn
+                </p>
+              </div>
+
+              {/* Manager / Admin Quick Links */}
+              {(role === 'manager' || role === 'admin') && (
+                <div className="mb-8 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-2xl p-6">
+                  <h2 className="text-xl font-bold text-purple-900 dark:text-purple-100 mb-4 flex items-center gap-2">
+                    <Settings className="w-5 h-5" /> Bảng Điều Khiển Quản Trị
+                  </h2>
+                  <div className="flex flex-wrap gap-4">
+                    <Button variant="outline" className="border-purple-200 hover:bg-purple-100 dark:border-purple-700 dark:hover:bg-purple-800" asChild>
+                      <Link href="/courses/create"><Plus className="w-4 h-4 mr-2" /> Tạo khóa học mới</Link>
+                    </Button>
+                    <Button variant="outline" className="border-purple-200 hover:bg-purple-100 dark:border-purple-700 dark:hover:bg-purple-800" asChild>
+                      <Link href="/admin/courses"><BookOpen className="w-4 h-4 mr-2" /> Quản lý khóa học</Link>
+                    </Button>
+                    {role === 'admin' && (
+                      <Button variant="outline" className="border-purple-200 hover:bg-purple-100 dark:border-purple-700 dark:hover:bg-purple-800" asChild>
+                        <Link href="/admin/platform"><Users className="w-4 h-4 mr-2" /> Quản lý hệ thống</Link>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Premium Quick Links */}
+              {(role === 'student' && isPremium) && (
+                <div className="mb-8 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-6">
+                  <h2 className="text-xl font-bold text-orange-900 dark:text-orange-100 mb-4 flex items-center gap-2">
+                    <Award className="w-5 h-5" /> Khu Vực Premium
+                  </h2>
+                  <div className="flex gap-4">
+                    <Button className="bg-orange-500 hover:bg-orange-600 text-white" asChild>
+                      <Link href="/courses/create"><Plus className="w-4 h-4 mr-2" /> Tạo khóa học mới</Link>
+                    </Button>
+                    <Button variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-800" asChild>
+                      <Link href="/my-courses"><BookOpen className="w-4 h-4 mr-2" /> Khóa học của tôi</Link>
+                    </Button>
+                  </div>
+                </div>
+              )}
             </motion.div>
 
             {/* Quick Stats */}
@@ -55,19 +152,19 @@ export default function DashboardPage() {
                 {
                   icon: BookOpen,
                   label: 'Courses Enrolled',
-                  value: enrolledCourses.length,
+                  value: courseDetails.length,
                   color: 'orange',
                 },
                 {
                   icon: TrendingUp,
                   label: 'Average Progress',
-                  value: `${Math.round(enrolledCourses.reduce((sum, p) => sum + p.progressPercentage, 0) / enrolledCourses.length || 0)}%`,
+                  value: `${avgProgress}%`,
                   color: 'red',
                 },
                 {
                   icon: Award,
                   label: 'Certifications',
-                  value: enrolledCourses.filter((p) => p.status === 'completed').length,
+                  value: completedCount,
                   color: 'green',
                 },
                 {
@@ -143,33 +240,7 @@ export default function DashboardPage() {
               )}
             </motion.div>
 
-            {/* Recommendations */}
-            <motion.div variants={itemVariants}>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Recommended for You</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {mockCourses
-                  .filter((c) => !enrolledCourses.some((p) => p.courseId === c.id))
-                  .slice(0, 2)
-                  .map((course) => (
-                    <div key={course.id} className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6 hover:shadow-md transition flex flex-col justify-between">
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{course.title}</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{course.description}</p>
-                      </div>
-                      <div className="flex items-center justify-between mt-auto">
-                        <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-3 py-1 rounded-full font-medium">
-                          {course.category}
-                        </span>
-                        <Link href={`/courses/${course.id}`}>
-                          <Button size="sm" variant="outline" className="dark:border-slate-600 dark:text-slate-300">
-                            View
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </motion.div>
+
           </motion.div>
         </main>
 

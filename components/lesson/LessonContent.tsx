@@ -106,6 +106,8 @@ export default function LessonContent({
                 productDescription={simulatorData[lesson.id].productDescription}
                 productPrice={simulatorData[lesson.id].productPrice}
                 scenarioDescription={simulatorData[lesson.id].scenarioDescription}
+                courseId={course.id}
+                lessonId={lesson.id}
               />
             </div>
           ) : (

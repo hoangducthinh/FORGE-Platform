@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/auth-context';
 import {
   LineChart,
   Line,
@@ -22,26 +24,41 @@ interface HistoryRecord {
 }
 
 export function SimulatorProgressChart() {
+  const { user } = useAuth();
+  const supabase = createClient();
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
-    const historyData = localStorage.getItem('forge-simulator-history');
-    if (historyData) {
+    async function loadSimulatorHistory() {
+      if (!user) return;
       try {
-        const parsed: HistoryRecord[] = JSON.parse(historyData);
-        // Format data for chart
-        const formatted = parsed.map((item, index) => ({
-          name: `S${index + 1}`,
-          date: format(new Date(item.date), 'MMM dd, HH:mm'),
-          score: item.score,
-          fullData: item,
-        }));
-        setData(formatted);
+        const { data: sessions, error } = await (supabase as any)
+          .from('simulator_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (sessions && sessions.length > 0) {
+          const formatted = sessions.map((item: any, index: number) => ({
+            name: `S${index + 1}`,
+            date: format(new Date(item.created_at), 'MMM dd, HH:mm'),
+            score: item.current_score,
+            fullData: {
+               productName: 'Simulation Session',
+               persona: item.current_stage || 'early',
+               date: item.created_at
+            },
+          }));
+          setData(formatted);
+        }
       } catch (e) {
-        console.error('Error parsing history', e);
+        console.error('Error fetching simulator history:', e);
       }
     }
-  }, []);
+    loadSimulatorHistory();
+  }, [user, supabase]);
 
   if (data.length === 0) {
     return (

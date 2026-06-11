@@ -1,5 +1,17 @@
 // User types
-export type UserRole = 'trainee' | 'course_admin' | 'platform_admin';
+export type UserRole = 'student' | 'manager' | 'admin';
+export type UserPlan = 'free' | 'premium';
+
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  plan: UserPlan;
+  is_premium: boolean;
+  premium_until: Date | string | null;
+  created_at: Date | string;
+}
 
 export interface User {
   id: string;

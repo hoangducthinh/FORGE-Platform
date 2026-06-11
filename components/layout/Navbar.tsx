@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, profile, role, plan, isPremium, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -42,21 +42,61 @@ export function Navbar() {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-4">
+            {/* Default for all */}
             <Link href="/dashboard" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
               Dashboard
             </Link>
             <Link href="/courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
               Courses
             </Link>
-            {user.role === 'course_admin' && (
-              <Link href="/admin/courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
-                Course Admin
+
+            {/* student / free */}
+            {role === 'student' && !isPremium && (
+              <Link href="/upgrade" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 text-sm font-bold flex items-center gap-1">
+                <span className="bg-gradient-to-r from-orange-400 to-red-500 text-transparent bg-clip-text">Upgrade Premium</span>
               </Link>
             )}
-            {user.role === 'platform_admin' && (
-              <Link href="/admin/platform" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
-                Platform Admin
-              </Link>
+
+            {/* student / premium */}
+            {(role === 'student' && isPremium) && (
+              <>
+                <Link href="/courses/create" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  Create Course
+                </Link>
+                <Link href="/my-courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  My Courses
+                </Link>
+              </>
+            )}
+
+            {/* manager */}
+            {role === 'manager' && (
+              <>
+                <Link href="/courses/create" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  Create Course
+                </Link>
+                <Link href="/admin/courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  Manage Courses
+                </Link>
+                <Link href="/admin/platform" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  Reports
+                </Link>
+              </>
+            )}
+
+            {/* admin */}
+            {role === 'admin' && (
+              <>
+                <Link href="/courses/create" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  Create Course
+                </Link>
+                <Link href="/admin/courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  Manage Courses
+                </Link>
+                <Link href="/admin/platform" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  Admin Panel
+                </Link>
+              </>
             )}
           </div>
 
@@ -77,17 +117,20 @@ export function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2 text-gray-800 dark:text-gray-200">
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                    {user.name?.charAt(0) || 'U'}
+                    {(profile?.full_name || user.email || 'U').charAt(0).toUpperCase()}
                   </div>
-                  <span className="hidden sm:inline text-sm">{user.name || 'User'}</span>
+                  <span className="hidden sm:inline text-sm font-medium flex items-center gap-2">
+                    {profile?.full_name || user.email?.split('@')[0] || 'User'}
+                    {isPremium && <span className="bg-gradient-to-r from-orange-400 to-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">PRO</span>}
+                  </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 dark:bg-slate-800 dark:border-slate-700">
                 <DropdownMenuItem disabled className="text-xs text-gray-500 dark:text-gray-400">
                   {user.email}
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled className="text-xs text-gray-500 dark:text-gray-400">
-                  Role: {user.role?.replace('_', ' ') || 'User'}
+                <DropdownMenuItem disabled className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                  Role: {role} {isPremium ? '(Premium)' : '(Free)'}
                 </DropdownMenuItem>
                 <div className="my-1 border-t dark:border-slate-700" />
                 <DropdownMenuItem asChild>
@@ -119,15 +162,46 @@ export function Navbar() {
             <Link href="/courses" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
               Courses
             </Link>
-            {user.role === 'course_admin' && (
-              <Link href="/admin/courses" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
-                Course Admin
+            {role === 'student' && !isPremium && (
+              <Link href="/upgrade" className="block px-4 py-2 text-sm text-orange-600 font-bold hover:bg-orange-50 dark:hover:bg-orange-900/20">
+                Upgrade Premium
               </Link>
             )}
-            {user.role === 'platform_admin' && (
-              <Link href="/admin/platform" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
-                Platform Admin
-              </Link>
+            {(role === 'student' && isPremium) && (
+              <>
+                <Link href="/courses/create" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  Create Course
+                </Link>
+                <Link href="/my-courses" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  My Courses
+                </Link>
+              </>
+            )}
+            {role === 'manager' && (
+              <>
+                <Link href="/courses/create" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  Create Course
+                </Link>
+                <Link href="/admin/courses" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  Manage Courses
+                </Link>
+                <Link href="/admin/platform" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  Reports
+                </Link>
+              </>
+            )}
+            {role === 'admin' && (
+              <>
+                <Link href="/courses/create" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  Create Course
+                </Link>
+                <Link href="/admin/courses" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  Manage Courses
+                </Link>
+                <Link href="/admin/platform" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  Admin Panel
+                </Link>
+              </>
             )}
           </div>
         )}

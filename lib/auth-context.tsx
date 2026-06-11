@@ -5,13 +5,14 @@ import { createClient } from './supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Database } from './supabase/database.types';
 
-interface AuthUser extends User {
-  name?: string;
-  role?: string;
-}
+import type { UserRole, UserPlan, Profile } from './types';
 
 interface AuthContextType {
-  user: AuthUser | null;
+  user: User | null;
+  profile: Profile | null;
+  role: UserRole | null;
+  plan: UserPlan | null;
+  isPremium: boolean;
   isLoading: boolean;
   signup: (email: string, name: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -23,7 +24,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   // Memoize the Supabase client to prevent recreation on every render
@@ -38,24 +40,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } = await supabase.auth.getUser();
         
         if (authUser) {
+          setUser(authUser);
           // Fetch profile data
-          const { data: profile } = await supabase
+          let { data: profileData } = await supabase
             .from('profiles')
-            .select('name, role')
+            .select('*')
             .eq('id', authUser.id)
             .single();
           
-          setUser({
-            ...authUser,
-            name: profile?.name,
-            role: profile?.role,
-          });
+          if (!profileData) {
+             // auto-create profile
+             const newProfile = {
+                id: authUser.id,
+                email: authUser.email || '',
+                full_name: '',
+                role: 'student' as UserRole,
+                plan: 'free' as UserPlan,
+                is_premium: false
+             };
+             await (supabase.from('profiles') as any).insert(newProfile as any);
+             profileData = newProfile as any;
+          }
+          setProfile(profileData as any);
         } else {
           setUser(null);
+          setProfile(null);
         }
       } catch (error) {
         console.error('Error getting session:', error);
         setUser(null);
+        setProfile(null);
       } finally {
         setIsLoading(false);
       }
@@ -68,20 +82,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        setUser(session.user);
         // Fetch profile data
-        const { data: profile } = await supabase
+        let { data: profileData } = await supabase
           .from('profiles')
-          .select('name, role')
+          .select('*')
           .eq('id', session.user.id)
           .single();
         
-        setUser({
-          ...session.user,
-          name: profile?.name,
-          role: profile?.role,
-        });
+        if (!profileData) {
+             const newProfile = {
+                id: session.user.id,
+                email: session.user.email || '',
+                full_name: '',
+                role: 'student' as UserRole,
+                plan: 'free' as UserPlan,
+                is_premium: false
+             };
+             await (supabase.from('profiles') as any).insert(newProfile as any);
+             profileData = newProfile as any;
+        }
+        setProfile(profileData as any);
       } else {
         setUser(null);
+        setProfile(null);
       }
     });
 
@@ -96,8 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: {
-          name,
-          role: 'trainee',
+          full_name: name,
         },
         emailRedirectTo:
           process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
@@ -139,7 +162,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signup, login, logout, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile,
+      role: profile?.role || null,
+      plan: profile?.plan || null,
+      isPremium: profile?.is_premium || false,
+      isLoading, 
+      signup, 
+      login, 
+      logout, 
+      resetPassword, 
+      updatePassword 
+    }}>
       {children}
     </AuthContext.Provider>
   );

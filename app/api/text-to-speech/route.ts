@@ -33,8 +33,6 @@ export async function POST(request: NextRequest) {
     console.log('[TTS] Calling ElevenLabs TTS API');
 
     const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
-    
-    // We try eleven_flash_v2_5 for speed and low cost, fallback to turbo/multilingual if needed.
     const requestBody = {
       text,
       model_id: 'eleven_flash_v2_5',
@@ -46,67 +44,75 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const response = await fetch(elevenLabsUrl, {
-      method: 'POST',
-      headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': apiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    let response: Response | null = null;
+    let attempts = 0;
+    const maxAttempts = 2; // 1 initial + 1 retry
 
-    console.log('[TTS] Response status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[TTS] API Error:', response.status, errorText);
-
-      // User reminder: For ElevenLabs free accounts, library voices are not allowed via API.
-      // Please use a default/cloned voice ID in ELEVENLABS_VOICE_ID, or upgrade your plan.
-      if (response.status === 402 || errorText.includes('paid_plan_required')) {
-        return NextResponse.json(
-          {
-            error: 'ELEVENLABS_VOICE_NOT_AVAILABLE_FOR_FREE_PLAN',
-            audioBase64: '',
-            fallback: true,
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        console.log(`[TTS] Attempt ${attempts}...`);
+        response = await fetch(elevenLabsUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+            'xi-api-key': apiKey,
           },
-          { status: 200 } // Return 200 to prevent frontend crash, handle gracefully via fallback
-        );
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(20000) // Increase timeout to 20000ms
+        });
+        
+        if (response.ok) {
+          break; // Success
+        }
+        
+        const errorText = await response.text();
+        console.error(`[TTS] Attempt ${attempts} API Error:`, response.status, errorText);
+        if (response.status === 402 || errorText.includes('paid_plan_required')) {
+          break; // Don't retry auth/billing errors
+        }
+      } catch (err: any) {
+        console.error(`[TTS] Attempt ${attempts} fetch error:`, err.message || err);
+        if (attempts >= maxAttempts) {
+           break;
+        }
       }
+    }
 
+    if (!response || !response.ok) {
+      console.warn('[TTS] ⚠️ TTS fallback no-audio');
       return NextResponse.json(
         {
-          error: `TTS API failed: ${response.status}`,
-          audioBase64: '',
-          fallback: true,
+          success: false,
+          audio: null,
+          error: `TTS_TIMEOUT`
         },
-        { status: 200 }
+        { status: 200 } // Return 200 to prevent frontend crash
       );
     }
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const audioBase64 = buffer.toString('base64');
-    const mimeType = 'audio/mpeg';
 
-    console.log('[TTS] ✅ Audio generated successfully');
-    console.log('[TTS] Audio size:', audioBase64.length, 'bytes');
-    console.log('[TTS] ========== REQUEST SUCCESS ==========');
+    console.log('[TTS] ✅ TTS success. Audio generated.');
+    console.log('[TTS] Audio size:', buffer.length, 'bytes');
 
-    return NextResponse.json({
-      audioBase64,
-      mimeType,
-      fallback: false,
-      language,
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': buffer.length.toString(),
+      },
     });
-  } catch (error) {
-    console.error('[TTS] ❌ EXCEPTION:', error);
+  } catch (error: any) {
+    console.error('[TTS] ❌ EXCEPTION:', error.message || error);
+    console.warn('[TTS] ⚠️ TTS fallback no-audio');
     return NextResponse.json(
       {
-        error: 'TTS exception',
-        audioBase64: '',
-        fallback: true,
+        success: false,
+        audio: null,
+        error: 'TTS exception: ' + (error.message || 'unknown'),
       },
       { status: 200 }
     );

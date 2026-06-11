@@ -4,32 +4,107 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/layout/Navbar';
 import { AIChat } from '@/components/layout/AIChat';
 import { useAuth } from '@/lib/auth-context';
-import { mockCourses, mockUserProgress } from '@/lib/mock-data';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
-import { Search, Filter } from 'lucide-react';
-import { useState } from 'react';
+import { Search, Filter, Loader2, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import type { Course } from '@/lib/supabase/database.types';
 
 export default function CoursesPage() {
   const { user } = useAuth();
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const enrolledCourseIds = mockUserProgress
-    .filter((p) => p.userId === user?.id)
-    .map((p) => p.courseId);
+  useEffect(() => {
+    async function fetchCoursesAndEnrollments() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        // Fetch courses where is_published = true
+        const { data: coursesData, error: coursesError } = await (supabase as any)
+          .from('courses')
+          .select('*')
+          .eq('is_published', true);
 
-  const publishedCourses = mockCourses.filter((c) => c.status === 'published');
+        if (coursesError) throw coursesError;
+        setCourses(coursesData || []);
 
-  const filteredCourses = publishedCourses.filter((course) => {
+        // Fetch enrollments if user is logged in
+        if (user) {
+          const { data: enrollmentsData, error: enrollmentsError } = await (supabase as any)
+            .from('course_enrollments')
+            .select('course_id')
+            .eq('user_id', user.id);
+
+          if (enrollmentsError) throw enrollmentsError;
+          setEnrolledCourseIds((enrollmentsData || []).map((e: any) => e.course_id));
+        }
+      } catch (err: any) {
+        console.error('Error fetching data:', err);
+        setError('Đã xảy ra lỗi khi tải danh sách khóa học. Vui lòng thử lại sau.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchCoursesAndEnrollments();
+  }, [user, supabase]);
+
+  const handleEnroll = async (courseId: string) => {
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+
+    try {
+      // Check if already enrolled (double check)
+      if (enrolledCourseIds.includes(courseId)) {
+        router.push(`/courses/${courseId}`);
+        return;
+      }
+
+      // Insert enrollment
+      const { error } = await (supabase as any)
+        .from('course_enrollments')
+        .insert({
+          user_id: user.id,
+          course_id: courseId,
+        });
+
+      if (error && error.code !== '23505') { // 23505 is unique violation, meaning already enrolled
+        throw error;
+      }
+
+      // Update local state
+      setEnrolledCourseIds(prev => [...prev, courseId]);
+      
+      // Navigate to course details
+      router.push(`/courses/${courseId}`);
+    } catch (err) {
+      console.error('Error enrolling in course:', err);
+      alert('Không thể đăng ký khóa học lúc này. Vui lòng thử lại.');
+    }
+  };
+
+  const filteredCourses = courses.filter((course) => {
     const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       course.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || course.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const categories = Array.from(new Set(publishedCourses.map((c) => c.category)));
+  const categories = Array.from(new Set(courses.map((c) => c.category)));
 
   return (
     <ProtectedRoute>
@@ -85,8 +160,22 @@ export default function CoursesPage() {
             </div>
           </div>
 
-          {/* Courses Grid */}
-          {filteredCourses.length > 0 ? (
+          {/* Loading State */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">Đang tải danh sách khóa học...</p>
+            </div>
+          ) : error ? (
+            /* Error State */
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+              <p className="text-red-600 dark:text-red-400">{error}</p>
+              <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">
+                Thử lại
+              </Button>
+            </div>
+          ) : filteredCourses.length > 0 ? (
+            /* Courses Grid */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredCourses.map((course) => {
                 const isEnrolled = enrolledCourseIds.includes(course.id);
@@ -96,10 +185,18 @@ export default function CoursesPage() {
                     className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm hover:shadow-md transition overflow-hidden flex flex-col"
                   >
                     {/* Course Image */}
-                    <div className="h-40 bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 dark:from-blue-900/40 dark:via-purple-900/40 dark:to-pink-900/40 relative overflow-hidden">
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-6xl opacity-10">📚</div>
-                      </div>
+                    <div className="h-40 relative overflow-hidden bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
+                      {course.thumbnail_url ? (
+                        <img 
+                          src={course.thumbnail_url} 
+                          alt={course.title} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 dark:from-blue-900/40 dark:via-purple-900/40 dark:to-pink-900/40 flex items-center justify-center">
+                          <ImageIcon className="w-12 h-12 text-blue-300 dark:text-blue-700 opacity-50" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Course Info */}
@@ -121,17 +218,16 @@ export default function CoursesPage() {
 
                       {/* Footer */}
                       <div className="mt-auto">
-                        <Link href={`/courses/${course.id}`}>
-                          <Button
-                            className={`w-full ${
-                              isEnrolled
-                                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
-                                : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
-                            }`}
-                          >
-                            {isEnrolled ? 'Continue' : 'Enroll Now'}
-                          </Button>
-                        </Link>
+                        <Button
+                          onClick={() => handleEnroll(course.id)}
+                          className={`w-full ${
+                            isEnrolled
+                              ? 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
+                              : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
+                          }`}
+                        >
+                          {isEnrolled ? 'Continue' : 'Enroll Now'}
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -139,6 +235,7 @@ export default function CoursesPage() {
               })}
             </div>
           ) : (
+            /* Empty State */
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-12 text-center">
               <Filter className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="font-semibold text-gray-900 dark:text-white mb-2">No Courses Found</h3>

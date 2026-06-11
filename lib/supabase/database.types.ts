@@ -16,24 +16,33 @@ export interface Database {
         Row: {
           id: string
           email: string
-          name: string
-          role: 'trainee' | 'course_admin' | 'platform_admin'
+          full_name: string
+          role: 'student' | 'manager' | 'admin'
+          plan: 'free' | 'premium'
+          is_premium: boolean
+          premium_until: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id: string
           email: string
-          name: string
-          role?: 'trainee' | 'course_admin' | 'platform_admin'
+          full_name?: string
+          role?: 'student' | 'manager' | 'admin'
+          plan?: 'free' | 'premium'
+          is_premium?: boolean
+          premium_until?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           email?: string
-          name?: string
-          role?: 'trainee' | 'course_admin' | 'platform_admin'
+          full_name?: string
+          role?: 'student' | 'manager' | 'admin'
+          plan?: 'free' | 'premium'
+          is_premium?: boolean
+          premium_until?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -43,34 +52,34 @@ export interface Database {
           id: string
           title: string
           description: string
+          thumbnail_url: string | null
+          level: string
           category: string
-          creator_id: string
-          status: 'draft' | 'published' | 'archived'
-          image_url: string | null
+          is_published: boolean
+          created_by: string
           created_at: string
-          updated_at: string
         }
         Insert: {
           id?: string
           title: string
           description: string
+          thumbnail_url?: string | null
+          level: string
           category: string
-          creator_id: string
-          status?: 'draft' | 'published' | 'archived'
-          image_url?: string | null
+          is_published?: boolean
+          created_by: string
           created_at?: string
-          updated_at?: string
         }
         Update: {
           id?: string
           title?: string
           description?: string
+          thumbnail_url?: string | null
+          level?: string
           category?: string
-          creator_id?: string
-          status?: 'draft' | 'published' | 'archived'
-          image_url?: string | null
+          is_published?: boolean
+          created_by?: string
           created_at?: string
-          updated_at?: string
         }
       }
       modules: {
@@ -102,88 +111,167 @@ export interface Database {
       lessons: {
         Row: {
           id: string
-          module_id: string
+          course_id: string
           title: string
           content: string | null
           video_url: string | null
-          resources: Json
-          order: number
+          order_index: number
+          lesson_type: string | null
+          is_published: boolean
+          simulator_config: Json | null
           created_at: string
         }
         Insert: {
           id?: string
-          module_id: string
+          course_id: string
           title: string
           content?: string | null
           video_url?: string | null
-          resources?: Json
-          order?: number
+          order_index: number
+          lesson_type?: string | null
+          is_published?: boolean
+          simulator_config?: Json | null
           created_at?: string
         }
         Update: {
           id?: string
-          module_id?: string
+          course_id?: string
           title?: string
           content?: string | null
           video_url?: string | null
-          resources?: Json
-          order?: number
+          order_index?: number
+          lesson_type?: string | null
+          is_published?: boolean
+          simulator_config?: Json | null
           created_at?: string
         }
       }
-      user_progress: {
+      course_enrollments: {
         Row: {
           id: string
           user_id: string
           course_id: string
-          enrollment_date: string
+          enrolled_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          course_id: string
+          enrolled_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          course_id?: string
+          enrolled_at?: string
+        }
+      }
+      user_course_progress: {
+        Row: {
+          id: string
+          user_id: string
+          course_id: string
           progress_percentage: number
-          status: 'in_progress' | 'completed' | 'failed'
           last_accessed: string
         }
         Insert: {
           id?: string
           user_id: string
           course_id: string
-          enrollment_date?: string
           progress_percentage?: number
-          status?: 'in_progress' | 'completed' | 'failed'
           last_accessed?: string
         }
         Update: {
           id?: string
           user_id?: string
           course_id?: string
-          enrollment_date?: string
           progress_percentage?: number
-          status?: 'in_progress' | 'completed' | 'failed'
           last_accessed?: string
         }
-      }
-      lesson_completions: {
+      },
+      simulator_sessions: {
         Row: {
           id: string
           user_id: string
+          course_id: string
           lesson_id: string
-          completed_at: string
-          time_spent_minutes: number
+          status: 'in_progress' | 'completed' | 'abandoned'
+          current_stage: string
+          current_score: number
+          session_avg: number
+          turns_count: number
+          last_feedback: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
+          course_id: string
           lesson_id: string
-          completed_at?: string
-          time_spent_minutes?: number
+          status?: 'in_progress' | 'completed' | 'abandoned'
+          current_stage?: string
+          current_score?: number
+          session_avg?: number
+          turns_count?: number
+          last_feedback?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
           user_id?: string
+          course_id?: string
           lesson_id?: string
-          completed_at?: string
-          time_spent_minutes?: number
+          status?: 'in_progress' | 'completed' | 'abandoned'
+          current_stage?: string
+          current_score?: number
+          session_avg?: number
+          turns_count?: number
+          last_feedback?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      },
+      simulator_messages: {
+        Row: {
+          id: string
+          session_id: string
+          user_id: string
+          role: 'system' | 'sales' | 'customer'
+          content: string
+          audio_url: string | null
+          response_source: string | null
+          score_delta: number | null
+          stage: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          user_id: string
+          role: 'system' | 'sales' | 'customer'
+          content: string
+          audio_url?: string | null
+          response_source?: string | null
+          score_delta?: number | null
+          stage?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          user_id?: string
+          role?: 'system' | 'sales' | 'customer'
+          content?: string
+          audio_url?: string | null
+          response_source?: string | null
+          score_delta?: number | null
+          stage?: string | null
+          created_at?: string
         }
       }
-    }
+    },
     Views: {
       [_ in never]: never
     }
@@ -201,5 +289,7 @@ export type Profile = Database['public']['Tables']['profiles']['Row']
 export type Course = Database['public']['Tables']['courses']['Row']
 export type Module = Database['public']['Tables']['modules']['Row']
 export type Lesson = Database['public']['Tables']['lessons']['Row']
-export type UserProgress = Database['public']['Tables']['user_progress']['Row']
-export type LessonCompletion = Database['public']['Tables']['lesson_completions']['Row']
+export type CourseEnrollment = Database['public']['Tables']['course_enrollments']['Row']
+export type UserCourseProgress = Database['public']['Tables']['user_course_progress']['Row']
+export type SimulatorSession = Database['public']['Tables']['simulator_sessions']['Row']
+export type SimulatorMessage = Database['public']['Tables']['simulator_messages']['Row']

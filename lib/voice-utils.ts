@@ -194,10 +194,10 @@ export function playGeneratedAudio(
       };
 
       audio.onerror = async (err) => {
-        console.error('[Audio] Playback error:', err);
-        console.error('[Audio] networkState:', audio.networkState);
-        console.error('[Audio] readyState:', audio.readyState);
-        console.error('[Audio] currentSrc:', audio.currentSrc);
+        console.warn('[Audio] Playback error:', err);
+        console.warn('[Audio] networkState:', audio.networkState);
+        console.warn('[Audio] readyState:', audio.readyState);
+        console.warn('[Audio] currentSrc:', audio.currentSrc);
 
         // Fallback: if PCM raw WAV failed, try 16-bit byte-swapped PCM
         if (mimeType.includes('L16') || mimeType.includes('pcm')) {
@@ -233,7 +233,7 @@ export function playGeneratedAudio(
             };
 
             retryAudio.onerror = () => {
-              console.error('[Audio] Playback still failed after endian-swap fallback');
+              console.warn('[Audio] Playback still failed after endian-swap fallback');
               if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(currentAudioUrl);
               }
@@ -242,10 +242,15 @@ export function playGeneratedAudio(
               reject(new Error('Audio playback failed'));
             };
 
-            await retryAudio.play();
+            try {
+              await retryAudio.play();
+            } catch (playErr) {
+              console.warn('[Audio] Playback skipped (retry):', playErr);
+              reject(playErr);
+            }
             return;
           } catch (fallbackError) {
-            console.error('[Audio] Endian-swap fallback failed:', fallbackError);
+            console.warn('[Audio] Endian-swap fallback failed:', fallbackError);
           }
         }
 
@@ -258,7 +263,7 @@ export function playGeneratedAudio(
       };
 
       audio.play().catch((err) => {
-        console.error('[Audio] play() error:', err);
+        console.warn('[Audio] Playback skipped:', err);
         if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
           URL.revokeObjectURL(currentAudioUrl);
         }
@@ -267,7 +272,7 @@ export function playGeneratedAudio(
         reject(err);
       });
     } catch (error) {
-      console.error('[Audio] Exception during setup:', error);
+      console.warn('[Audio] Exception during setup:', error);
       reject(error);
     }
   });
@@ -330,7 +335,7 @@ export async function requestGeminiTTS(
 ): Promise<{
   audioBase64?: string;
   mimeType?: string;
-  fallback?: boolean;
+  success?: boolean;
   error?: string;
 }> {
   try {
@@ -346,24 +351,49 @@ export async function requestGeminiTTS(
       body: JSON.stringify({ text, language: resolvedLanguage }),
     });
 
+    const contentType = response.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      console.log('[TTS Request] Received JSON response. Success:', data.success);
+      return {
+        success: false, // if it returned JSON in our setup, it's an error
+        error: data.error || 'TTS failed',
+        audioBase64: '',
+      };
+    }
+
     if (!response.ok) {
       const error = `HTTP ${response.status}`;
       console.error('[TTS Request] ❌ API error:', error);
       throw new Error(error);
     }
 
-    const data = await response.json();
-    console.log('[TTS Request] ✅ Response received');
-    console.log('[TTS Request] Has audio:', !!data.audioBase64);
-    console.log('[TTS Request] MIME type:', data.mimeType);
-    console.log('[TTS Request] Fallback:', data.fallback);
+    // It's an audio blob
+    const blob = await response.blob();
+    console.log('[TTS Request] ✅ Audio Blob received. Size:', blob.size);
 
-    return data;
+    if (blob.size === 0) {
+      console.warn('[TTS Request] Received empty audio blob');
+      return { success: false, error: 'Empty audio blob' };
+    }
+
+    // Convert Blob to Base64
+    const buffer = await blob.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+
+    return {
+      success: true,
+      audioBase64: base64,
+      mimeType: contentType || 'audio/mpeg',
+    };
   } catch (error) {
     console.error('[TTS Request] Exception:', error);
     return {
       error: error instanceof Error ? error.message : 'Unknown error',
-      fallback: true,
+      success: false,
     };
   }
 }
@@ -392,16 +422,16 @@ export async function autoPlayAIMessage(
     const ttsResult = await requestGeminiTTS(text, resolvedLanguage);
 
     // Check for errors or fallback
-    if (ttsResult.error) {
-      console.warn('[AutoPlay] TTS error:', ttsResult.error);
+    if (ttsResult.error || ttsResult.success === false) {
+      console.warn('[AutoPlay] TTS error or unsuccessful:', ttsResult.error);
       if (onError) {
-        onError(ttsResult.error);
+        onError(ttsResult.error || 'TTS API unsuccessful');
       }
       return { success: false };
     }
 
-    if (ttsResult.fallback || !ttsResult.audioBase64) {
-      console.warn('[AutoPlay] TTS unavailable or fallback mode');
+    if (!ttsResult.audioBase64) {
+      console.warn('[AutoPlay] TTS unavailable or no audio returned');
       if (onError) {
         onError('Audio generation unavailable');
       }

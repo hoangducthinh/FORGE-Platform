@@ -2,7 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Volume2, AlertCircle, CheckCircle, UserCircle } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, AlertCircle, CheckCircle, UserCircle, MapPin, Building2, TrendingUp, ShieldCheck, ArrowRight, MessageCircle } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/lib/supabase/database.types';
+type DbSession = import('@/lib/supabase/database.types').Database['public']['Tables']['simulator_sessions']['Row'];
+
 import { ModeToggle } from '@/components/sales-simulator/ModeToggle';
 import { TextChatInput } from '@/components/sales-simulator/TextChatInput';
 import { CustomerAvatarCard } from '@/components/sales-simulator/CustomerAvatarCard';
@@ -28,6 +33,14 @@ interface AISalesSimulatorProps {
   productDescription: string;
   productPrice: string;
   scenarioDescription: string;
+  keyFeatures?: string[];
+  salesTips?: string[];
+  openingMessage?: string;
+  courseId: string;
+  lessonId: string;
+  onBack?: () => void;
+  onLessonComplete?: () => void;
+  simulationMode?: 'sales' | 'knowledge_check';
 }
 
 export default function AISalesSimulator({
@@ -35,13 +48,21 @@ export default function AISalesSimulator({
   productDescription,
   productPrice,
   scenarioDescription,
+  keyFeatures = [],
+  salesTips = [],
+  openingMessage,
+  courseId,
+  lessonId,
+  onBack,
+  onLessonComplete,
+  simulationMode = 'sales',
 }: AISalesSimulatorProps) {
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [transcription, setTranscription] = useState('');
-  const [salesScore, setSalesScore] = useState(0);
-  const [feedback, setFeedback] = useState('');
+  const [salesScore, setSalesScore] = useState(50);
+  const [feedback, setFeedback] = useState<string>('Hãy bắt đầu tư vấn để hệ thống AI phân tích và đánh giá kỹ năng của bạn.');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -50,7 +71,17 @@ export default function AISalesSimulator({
   const [currentStage, setCurrentStage] = useState('early');
   const [saleOutcome, setSaleOutcome] = useState<string | null>(null);
   const [isConversationComplete, setIsConversationComplete] = useState(false);
+  const [closingOutcome, setClosingOutcome] = useState<'success' | 'failure' | null>(null);
   const [persona, setPersona] = useState<'skeptical' | 'warm_lead' | 'random'>('random');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isInitializingHistory, setIsInitializingHistory] = useState(true);
+
+  useEffect(() => {
+    if (isConversationComplete && onLessonComplete) {
+      onLessonComplete();
+    }
+  }, [isConversationComplete, onLessonComplete]);
+  const supabase: any = createClient();
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -58,25 +89,115 @@ export default function AISalesSimulator({
   const conversationEndRef = useRef<HTMLDivElement>(null);
   const lastSpokenMessageIdRef = useRef<string>('');
 
-  // Initialize conversation with AI greeting
   useEffect(() => {
-    const initializeConversation = async () => {
-      const aiGreeting = `Chào bạn, tôi đang quan tâm đến ${productName}. Bạn có thể giới thiệu rõ hơn về sản phẩm này cho tôi được không?`;
+    const loadSession = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsInitializingHistory(false);
+          return;
+        }
 
-      const initialMsg: ConversationMessage = {
-        role: 'ai',
-        content: aiGreeting,
-        timestamp: new Date(),
-        id: `msg-${Date.now()}`,
-      };
+        const { data: sessionData, error: sessionError } = await supabase
+          .from('simulator_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('lesson_id', lessonId)
+          .eq('status', 'in_progress')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
 
-      setConversation([initialMsg]);
+        if (sessionError && sessionError.code !== 'PGRST116') {
+          console.error('Error fetching session:', sessionError);
+        }
 
-      console.log('[AISalesSimulator] Initialized with greeting, waiting for user interaction');
-      // Do NOT auto-play - wait for user interaction
+        if (sessionData) {
+          setSessionId(sessionData.id);
+          setSalesScore(sessionData.current_score);
+          setCurrentStage(sessionData.current_stage);
+          setFeedback(sessionData.last_feedback || 'Hãy tiếp tục tư vấn.');
+
+          const { data: messages, error: messagesError } = await supabase
+            .from('simulator_messages')
+            .select('*')
+            .eq('session_id', sessionData.id)
+            .order('created_at', { ascending: true });
+
+          if (!messagesError && messages && messages.length > 0) {
+            const mappedConversation: ConversationMessage[] = messages.map((m: any) => ({
+              id: m.id,
+              role: m.role === 'customer' || m.role === 'system' ? 'ai' : 'user',
+              content: m.content,
+              timestamp: new Date(m.created_at),
+              audioBase64: m.audio_url || undefined,
+            }));
+            setConversation(mappedConversation);
+          } else if (!messages || messages.length === 0) {
+            initializeNewSession(sessionData.id);
+          }
+        } else {
+          // Create new session
+          const { data: newSession, error: createError } = await supabase
+            .from('simulator_sessions')
+            .insert({
+              user_id: user.id,
+              course_id: courseId,
+              lesson_id: lessonId,
+              status: 'in_progress',
+              current_stage: 'early',
+              current_score: 50,
+              session_avg: 50,
+              turns_count: 0
+            })
+            .select()
+            .single();
+
+          if (newSession && !createError) {
+            setSessionId(newSession.id);
+            initializeNewSession(newSession.id);
+          } else {
+             console.error('Create session error:', createError);
+             initializeNewSession(null);
+          }
+        }
+      } catch (err) {
+        console.error('Load session error:', err);
+        initializeNewSession(null);
+      } finally {
+        setIsInitializingHistory(false);
+      }
     };
-    initializeConversation();
-  }, [productName, persona]); // Re-initialize if persona changes (and if it makes sense)
+
+    loadSession();
+  }, [courseId, lessonId]);
+
+  const initializeNewSession = (sid: string | null) => {
+    const greeting = openingMessage || (simulationMode === 'knowledge_check' 
+      ? 'Chào bạn, tôi sẽ kiểm tra nhanh kiến thức bất động sản cơ bản. Bạn có thể giải thích bất động sản là gì không?' 
+      : `Chào bạn, tôi đang quan tâm đến ${productName}. Bạn có thể giới thiệu rõ hơn về dự án này không?`);
+    const initialMsg: ConversationMessage = {
+      role: 'ai',
+      content: greeting,
+      timestamp: new Date(),
+      id: `msg-${Date.now()}`,
+    };
+    setConversation([initialMsg]);
+
+    if (sid) {
+      supabase.auth.getUser().then(({ data: { user } }: any) => {
+        if (user) {
+          supabase.from('simulator_messages').insert({
+            session_id: sid,
+            user_id: user.id,
+            role: 'customer',
+            content: greeting,
+            stage: 'early'
+          }).then(({ error }: any) => { if (error) console.warn(error); });
+        }
+      });
+    }
+  };
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -99,19 +220,15 @@ export default function AISalesSimulator({
 
       const processTTS = async () => {
         try {
-          console.log('[AISalesSimulator] Requesting TTS for message:', lastMessage.id);
-          
           const ttsResult = await requestGeminiTTS(lastMessage.content, 'vi-VN');
           
           if (!ttsResult.error && ttsResult.audioBase64) {
-            // Update message with audio so it can be replayed manually
             setConversation(prev => prev.map(msg => 
               msg.id === lastMessage.id 
                 ? { ...msg, audioBase64: ttsResult.audioBase64, mimeType: ttsResult.mimeType || 'audio/mpeg' } 
                 : msg
             ));
 
-            // Start playback
             setIsSpeaking(true);
             try {
               await playGeneratedAudio(ttsResult.audioBase64, ttsResult.mimeType || 'audio/mpeg', false);
@@ -134,15 +251,12 @@ export default function AISalesSimulator({
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
-      console.log('[AISalesSimulator] Cleaning up audio on unmount');
       stopCurrentAudio();
     };
   }, []);
 
   const startRecording = async () => {
-    // Mark user interaction
     markUserInteraction();
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -177,11 +291,9 @@ export default function AISalesSimulator({
   const handleAudioTranscription = async (audioBlob: Blob) => {
     setIsLoading(true);
     try {
-      // Create FormData for audio file
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.wav');
 
-      // Call API to transcribe audio
       const response = await fetch('/api/transcribe', {
         method: 'POST',
         body: formData,
@@ -193,7 +305,6 @@ export default function AISalesSimulator({
       const userMessage = data.text;
       setTranscription(userMessage);
 
-      // Add user message to conversation
       const newUserMessage: ConversationMessage = {
         role: 'user',
         content: userMessage,
@@ -202,17 +313,11 @@ export default function AISalesSimulator({
       };
       setConversation((prev) => [...prev, newUserMessage]);
 
-      // Get AI response
       await getAIResponse(userMessage);
     } catch (error) {
       console.error('Transcription error:', error);
-      const isNetworkError = error instanceof Error && (error.message.includes('fetch failed') || error.message.includes('network'));
-      setErrorMessage(
-        isNetworkError
-          ? 'Không thể kết nối đến máy chủ AI. Vui lòng kiểm tra mạng hoặc chuyển sang chế độ Text.'
-          : 'Không thể xử lý giọng nói. Vui lòng thử lại hoặc chuyển sang chế độ Text.'
-      );
-      setMode('text'); // Auto switch to text mode on transcription failure
+      setErrorMessage('Không thể xử lý giọng nói. Vui lòng thử lại hoặc chuyển sang chế độ Text.');
+      setMode('text');
     } finally {
       setIsLoading(false);
     }
@@ -221,9 +326,21 @@ export default function AISalesSimulator({
   const getAIResponse = async (userMessage: string) => {
     setIsLoading(true);
     try {
-      const finalSessionScore = turnScores.length > 0
-        ? Math.round(turnScores.reduce((sum, score) => sum + score, 0) / turnScores.length)
-        : 50;
+      const currentSessionScore = salesScore;
+
+      // Save user message
+      if (sessionId) {
+        supabase.auth.getUser().then(({ data: { user } }: any) => {
+          if (user) {
+            supabase.from('simulator_messages').insert({
+              session_id: sessionId,
+              user_id: user.id,
+              role: 'sales',
+              content: userMessage
+            }).then(({ error }: any) => { if (error) console.warn(error); });
+          }
+        });
+      }
 
       const response = await fetch('/api/sales-simulator/customer-response', {
         method: 'POST',
@@ -235,8 +352,9 @@ export default function AISalesSimulator({
           productPrice,
           conversationHistory: conversation,
           turnCount: Math.floor((conversation.length + 1) / 2),
-          sessionScore: finalSessionScore,
+          sessionScore: currentSessionScore,
           scenario: persona,
+          mode: simulationMode,
         }),
       });
 
@@ -244,25 +362,58 @@ export default function AISalesSimulator({
 
       const data = await response.json();
       const aiMessage = data.customerReply || data.response;
-      const scoreUpdate = data.score !== undefined ? data.score : (finalSessionScore + data.convictionDelta * 2);
-      const feedbackText = data.feedback || 'Good effort!';
+      const scoreUpdate = data.score !== undefined ? data.score : (currentSessionScore + data.convictionDelta * 2);
+      const feedbackText = data.feedback || 'Bạn đang làm rất tốt, hãy tiếp tục!';
       const stage = data.stage || 'early';
       const outcome = data.outcome || null;
       const isComplete = data.isConversationComplete || false;
+      const responseSource = data.responseSource || 'unknown';
 
-      // Update scores
+      console.log('\n=========================================');
+      console.log('🤖 AI RESPONSE DEBUG INFO:');
+      console.log('▶ customerReply:', aiMessage);
+      console.log('▶ responseSource:', responseSource);
+      console.log('▶ nextStage:', stage);
+      console.log('▶ scoreDelta:', data.scoreDelta);
+      console.log('▶ usedFallback:', responseSource !== 'gemini');
+      console.log('=========================================\n');
+
       setSalesScore(scoreUpdate);
       setFeedback(feedbackText);
       setTurnScores((prev) => [...prev, scoreUpdate]);
       setCurrentStage(stage);
 
-      // Handle conversation completion
+      if (sessionId) {
+        supabase.auth.getUser().then(({ data: { user } }: any) => {
+          if (user) {
+            supabase.from('simulator_messages').insert({
+              session_id: sessionId,
+              user_id: user.id,
+              role: 'customer',
+              content: aiMessage,
+              response_source: responseSource,
+              score_delta: data.scoreDelta,
+              stage: stage
+            }).then(({ error }: any) => { if (error) console.warn(error); });
+
+            const newTurnsCount = Math.floor((conversation.length + 2) / 2);
+            supabase.from('simulator_sessions').update({
+               current_score: scoreUpdate,
+               current_stage: stage,
+               session_avg: finalSessionScore,
+               turns_count: newTurnsCount,
+               last_feedback: feedbackText,
+               updated_at: new Date().toISOString(),
+               status: isComplete ? 'completed' : 'in_progress'
+            }).eq('id', sessionId).then(({ error }: any) => { if (error) console.warn(error); });
+          }
+        });
+      }
+
       if (isComplete && outcome) {
-        console.log('[AISalesSimulator] Conversation complete with outcome:', outcome);
         setIsConversationComplete(true);
         setSaleOutcome(outcome);
         
-        // Save to localStorage for charts
         const history = JSON.parse(localStorage.getItem('forge-simulator-history') || '[]');
         history.push({
           date: new Date().toISOString(),
@@ -274,7 +425,6 @@ export default function AISalesSimulator({
         localStorage.setItem('forge-simulator-history', JSON.stringify(history));
       }
 
-      // Add AI message WITHOUT audio first (updates UI instantly)
       const newAIMessage: ConversationMessage = {
         role: 'ai',
         content: aiMessage,
@@ -286,18 +436,15 @@ export default function AISalesSimulator({
       setErrorMessage('');
     } catch (error) {
       console.error('AI response error:', error);
-      setFeedback('Failed to get AI response. Please try again.');
-      setErrorMessage('Hệ thống AI gặp sự cố. Vui lòng gửi lại tin nhắn của bạn.');
+      setFeedback('AI đánh giá đang tạm lỗi, nhưng hội thoại vẫn tiếp tục.');
+      setErrorMessage('Có lỗi xảy ra khi gọi AI. Hãy thử lại.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleTextMessage = async (textMessage: string) => {
-    // Mark user interaction
     markUserInteraction();
-
-    // Add user message to conversation
     const newUserMessage: ConversationMessage = {
       role: 'user',
       content: textMessage,
@@ -305,8 +452,6 @@ export default function AISalesSimulator({
       id: `msg-${Date.now()}-${Math.random()}`,
     };
     setConversation((prev) => [...prev, newUserMessage]);
-
-    // Get AI response
     await getAIResponse(textMessage);
   };
 
@@ -323,339 +468,432 @@ export default function AISalesSimulator({
     }
   };
 
+  const handleRestart = async () => {
+    if (sessionId) {
+      await supabase.from('simulator_sessions').update({ status: 'abandoned' }).eq('id', sessionId);
+    }
+    setSessionId(null);
+    setSalesScore(50);
+    setTurnScores([]);
+    setCurrentStage('early');
+    setSaleOutcome(null);
+    setIsConversationComplete(false);
+    setFeedback('Hãy bắt đầu tư vấn để hệ thống AI phân tích và đánh giá kỹ năng của bạn.');
+    
+    // Create new session
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: newSession } = await supabase.from('simulator_sessions').insert({
+        user_id: user.id,
+        course_id: courseId,
+        lesson_id: lessonId,
+        status: 'in_progress',
+        current_stage: 'early',
+        current_score: 50,
+        session_avg: 50,
+        turns_count: 0
+      }).select().single();
+      
+      if (newSession) {
+        setSessionId(newSession.id);
+        initializeNewSession(newSession.id);
+      }
+    }
+  };
+
   const finalSessionScore =
     turnScores.length > 0
       ? Math.round(turnScores.reduce((sum, score) => sum + score, 0) / turnScores.length)
-      : 0;
+      : 50;
 
-  const getOutcomeColor = (outcome: string | null) => {
-    if (outcome === 'buy') return 'bg-green-50 border-green-200 text-green-900';
-    if (outcome === 'need_more_info') return 'bg-blue-50 border-blue-200 text-blue-900';
-    if (outcome === 'reject') return 'bg-red-50 border-red-200 text-red-900';
-    return '';
-  };
-
-  const getOutcomeIcon = (outcome: string | null) => {
-    if (outcome === 'buy') return <CheckCircle className="w-5 h-5 text-green-600" />;
-    if (outcome === 'need_more_info') return <AlertCircle className="w-5 h-5 text-blue-600" />;
-    return null;
-  };
+  if (isInitializingHistory) {
+    return (
+      <div className="flex items-center justify-center min-h-[600px] w-full text-gray-500">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <p>Đang tải lịch sử hội thoại...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full min-h-0 h-[800px] bg-white/50 dark:bg-slate-800/30 rounded-[2rem] p-4 lg:p-6 border border-gray-200 dark:border-slate-700 shadow-sm transition-colors duration-300">
-      {/* Main Container */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8 min-h-0 h-full">
-        {/* Conversation Panel */}
-        <div className="lg:col-span-3 min-h-0 flex flex-col bg-white dark:bg-slate-800 rounded-3xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="shrink-0 bg-gradient-to-r from-orange-500 to-orange-600 text-white p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h2 className="font-bold text-xl drop-shadow-sm">Sales Pitch: {productName}</h2>
-              <p className="text-sm text-orange-100 mt-1 font-medium">Stage: <span className="capitalize">{currentStage}</span></p>
+    <div className="contents">
+      {/* 2 columns returned to the parent grid: Chat (left) + Info panel (middle) */}
+
+        {/* ═══════════ LEFT COLUMN — Chat & Bottom Panels ═══════════ */}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden" style={{ height: '75vh', minHeight: '600px' }}>
+
+          {/* Chat Header */}
+          <div className="shrink-0 bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-4 flex flex-wrap justify-between items-center gap-3">
+            <div className="flex items-center gap-3">
+              {onBack && (
+                <button 
+                  onClick={onBack}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                  title="Quay lại danh sách bài học"
+                >
+                  <span className="text-lg leading-none mb-0.5">←</span>
+                </button>
+              )}
+              <div>
+                <h2 className="font-bold text-lg">{productName}</h2>
+                <p className="text-sm text-orange-100 mt-0.5">
+                  Stage: <span className="capitalize font-medium">{currentStage}</span>
+                  {isConversationComplete && <span className="ml-2">✓ Completed</span>}
+                </p>
+              </div>
             </div>
-            
+                          <button
+                onClick={handleRestart}
+                className="bg-black/20 hover:bg-black/30 px-3 py-2 rounded-xl backdrop-blur-sm border border-white/10 text-white text-sm font-medium transition-colors"
+              >
+                Bắt đầu lại
+              </button>
             {/* Persona Selector */}
-            <div className="flex items-center gap-2 bg-black/20 p-2 rounded-xl backdrop-blur-sm border border-white/10">
-              <UserCircle className="w-5 h-5 text-white/90" />
-              <select 
-                value={persona} 
+            <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl backdrop-blur-sm border border-white/10">
+              <UserCircle className="w-4 h-4 text-white/90" />
+              <select
+                value={persona}
                 onChange={(e) => setPersona(e.target.value as any)}
                 disabled={conversation.length > 1}
-                className="bg-transparent text-white text-sm font-medium border-none focus:ring-0 cursor-pointer disabled:opacity-50 appearance-none pr-4"
+                className="bg-transparent text-white text-sm font-medium border-none focus:ring-0 cursor-pointer disabled:opacity-50 appearance-none pr-2"
               >
-                <option value="random" className="text-gray-900">Random Customer</option>
-                <option value="warm_lead" className="text-gray-900">Warm Lead</option>
-                <option value="skeptical" className="text-gray-900">Skeptical Buyer</option>
+                <option value="random" className="text-gray-900">{simulationMode === 'knowledge_check' ? 'AI Huấn luyện viên' : 'Random Customer'}</option>
+                <option value="warm_lead" className="text-gray-900">{simulationMode === 'knowledge_check' ? 'Chuyên gia' : 'Warm Lead'}</option>
+                <option value="skeptical" className="text-gray-900">{simulationMode === 'knowledge_check' ? 'Giám khảo khó tính' : 'Skeptical Buyer'}</option>
               </select>
             </div>
           </div>
 
-          {/* Status Banner */}
+          {/* Outcome Banner */}
           {isConversationComplete && saleOutcome && (
-            <div className={`shrink-0 border-b border-gray-200 dark:border-slate-700 p-4 ${
-              saleOutcome === 'buy' ? 'bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-300' :
-              saleOutcome === 'need_more_info' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-300' :
-              'bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-300'
+            <div className={`shrink-0 px-6 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center gap-3 ${
+              saleOutcome === 'buy' ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300' :
+              saleOutcome === 'need_more_info' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300' :
+              'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300'
             }`}>
-              <div className="flex items-center gap-3">
-                {getOutcomeIcon(saleOutcome)}
-                <div>
-                  <p className="font-bold">Conversation Ended</p>
-                  <p className="text-sm opacity-90">
-                    {saleOutcome === 'buy' && 'Customer decided to buy! Great job closing the deal.'}
-                    {saleOutcome === 'need_more_info' && 'Customer wants more information before deciding.'}
-                    {saleOutcome === 'reject' && 'Customer decided not to proceed at this time.'}
-                  </p>
-                </div>
+              {saleOutcome === 'buy' && <CheckCircle className="w-5 h-5 text-green-600" />}
+              {saleOutcome === 'need_more_info' && <AlertCircle className="w-5 h-5 text-blue-600" />}
+              <div>
+                <p className="font-bold text-sm">Kết thúc hội thoại</p>
+                <p className="text-xs opacity-80">
+                  {saleOutcome === 'buy' && 'Khách hàng muốn mua! Chúc mừng bạn.'}
+                  {saleOutcome === 'need_more_info' && 'Khách hàng cần thêm thông tin trước khi quyết định.'}
+                  {saleOutcome === 'reject' && 'Khách hàng chưa sẵn sàng lúc này.'}
+                </p>
               </div>
             </div>
           )}
 
-        {/* Messages */}
-        <div
-          className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/50 dark:bg-slate-900/50"
-          role="log"
-          aria-label="Conversation messages"
-          aria-live="polite"
-        >
-          {conversation.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'ml-auto justify-end' : 'mr-auto justify-start'}`}
-              role="article"
-              aria-label={`${msg.role === 'user' ? 'Your message' : 'AI response'}: ${msg.content}`}
-            >
+          {/* ─── MESSAGES LIST (TOP AREA) ─── */}
+          <div
+            className="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-slate-50/60 dark:bg-slate-900/40 relative"
+            style={{ minHeight: 0 }}
+          >
+            {/* Instruction watermark if empty */}
+            {conversation.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40 flex-col gap-3">
+                <Mic className="w-12 h-12 text-gray-400" />
+                <p className="text-gray-500 font-medium">Lịch sử hội thoại sẽ hiển thị tại đây</p>
+              </div>
+            )}
+
+            {conversation.map((msg) => (
               <div
-                className={`rounded-2xl p-4 shadow-sm ${
-                  msg.role === 'user'
-                    ? 'bg-orange-500 text-white rounded-br-none'
-                    : 'bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
-                }`}
+                key={msg.id}
+                className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
-                <span
-                  className={`text-xs mt-2 block ${msg.role === 'user' ? 'text-orange-100' : 'text-gray-400 dark:text-gray-500'}`}
-                  aria-label={`Sent at ${msg.timestamp.toLocaleTimeString()}`}
-                >
-                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-
-              {/* Manual Play Button for AI messages with audio */}
-              {msg.role === 'ai' && msg.audioBase64 && msg.id && (
-                <button
-                  onClick={() =>
-                    handleManualAudioPlay(
-                      msg.id!,
-                      msg.audioBase64!,
-                      msg.mimeType || 'audio/mpeg'
-                    )
-                  }
-                  disabled={playingAudioId === msg.id}
-                  aria-label={playingAudioId === msg.id ? 'Playing audio' : 'Play audio'}
-                  className="flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/40 hover:bg-orange-200 dark:hover:bg-orange-900/60 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 flex-shrink-0 self-end mb-1"
-                >
-                  {playingAudioId === msg.id ? (
-                    <Volume2 className="w-5 h-5 text-orange-600 dark:text-orange-400 animate-pulse" aria-hidden="true" />
-                  ) : (
-                    <Volume2 className="w-5 h-5 text-orange-600 dark:text-orange-400" aria-hidden="true" />
-                  )}
-                </button>
-              )}
-            </div>
-          ))}
-          <div ref={conversationEndRef} aria-live="assertive" />
-        </div>
-
-        {/* Mode Toggle */}
-        <div className="shrink-0">
-          <ModeToggle mode={mode} onModeChange={setMode} />
-        </div>
-
-        {/* Input Area */}
-        <div className="shrink-0 flex flex-col bg-gray-50/50 dark:bg-slate-800/50">
-          {/* Error/Feedback */}
-          {errorMessage && (
-            <div className="border-b border-gray-200 dark:border-slate-700 bg-red-50 dark:bg-red-900/10 p-4">
-              <div className="flex items-start gap-3 text-sm text-red-900 dark:text-red-300 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/50 rounded-xl p-4 shadow-sm">
-                <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-500" />
-                <div>
-                  <p className="font-semibold mb-1">System Message</p>
-                  <p className="text-red-800 dark:text-red-400 leading-relaxed">{errorMessage}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Conversation Complete Message */}
-          {isConversationComplete && (
-            <div className="border-t border-gray-200 dark:border-slate-700 bg-green-50 dark:bg-green-900/10 p-6">
-              <div className="text-center text-green-900 dark:text-green-400 text-sm font-medium">
-                <p className="text-base font-bold mb-1">Conversation Complete</p>
-                <p className="opacity-80">This sales simulation has ended. Great practice session!</p>
-              </div>
-            </div>
-          )}
-
-          {/* Voice Mode Input */}
-          {!isConversationComplete && mode === 'voice' && (
-            <div className="border-t border-gray-200 dark:border-slate-700 p-5 space-y-4 shrink-0 bg-white dark:bg-slate-800">
-              {transcription && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl text-sm text-blue-900 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
-                  <span className="font-semibold block mb-1">Your transcription:</span> {transcription}
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <Button
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isLoading || isSpeaking}
-                  variant={isRecording ? 'destructive' : 'outline'}
-                  className={`flex-1 h-12 text-base font-semibold rounded-xl ${
-                    isRecording
-                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/20 animate-pulse'
-                      : 'bg-orange-500 hover:bg-orange-600 text-white border-transparent shadow-md shadow-orange-500/20'
+                <div
+                  className={`max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm ${
+                    msg.role === 'user'
+                      ? 'bg-orange-500 text-white rounded-br-sm'
+                      : 'bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-gray-800 dark:text-gray-200 rounded-bl-sm'
                   }`}
                 >
-                  {isRecording ? (
-                    <>
-                      <MicOff className="w-5 h-5 mr-2" />
-                      Stop Recording
-                    </>
+                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+                  <span className={`text-xs mt-2 block font-medium ${msg.role === 'user' ? 'text-orange-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {msg.role === 'user' ? 'Bạn' : 'AI Khách hàng'} • {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+
+                {/* Audio replay button */}
+                {msg.role === 'ai' && msg.id && (
+                  msg.audioBase64 ? (
+                    <button
+                      onClick={() => handleManualAudioPlay(msg.id!, msg.audioBase64!, msg.mimeType || 'audio/mpeg')}
+                      disabled={playingAudioId === msg.id}
+                      className="flex items-center justify-center w-9 h-9 rounded-full bg-orange-100 dark:bg-orange-900/40 hover:bg-orange-200 dark:hover:bg-orange-900/60 disabled:opacity-50 transition-colors self-end mb-1 shrink-0 shadow-sm"
+                    >
+                      <Volume2 className={`w-4 h-4 text-orange-600 dark:text-orange-400 ${playingAudioId === msg.id ? 'animate-pulse' : ''}`} />
+                    </button>
                   ) : (
-                    <>
-                      <Mic className="w-5 h-5 mr-2" />
-                      Start Speaking
-                    </>
-                  )}
-                </Button>
-                {isSpeaking && (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-sm border border-orange-100 dark:border-orange-900/50">
-                    <Volume2 className="w-5 h-5 animate-pulse text-orange-600 dark:text-orange-400" />
-                    <span className="text-orange-700 dark:text-orange-400 font-medium hidden sm:inline">AI Speaking...</span>
-                  </div>
+                    <div
+                      className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 dark:bg-slate-800 self-end mb-1 shrink-0 opacity-50 cursor-not-allowed"
+                      title="Audio không khả dụng"
+                    >
+                      <VolumeX className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    </div>
+                  )
                 )}
               </div>
+            ))}
+
+            <div ref={conversationEndRef} className="h-4" />
+          </div>
+
+          {/* ─── CONTROLS SECTION (BOTTOM AREA) ─── */}
+          <div className="shrink-0 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm z-10 flex flex-col">
+            {/* Error message */}
+            {errorMessage && (
+              <div className="px-5 py-3 bg-red-50 dark:bg-red-900/10 border-b border-red-200 dark:border-red-900/30 flex items-start gap-2 text-sm text-red-700 dark:text-red-400">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <p>{errorMessage}</p>
+              </div>
+            )}
+
+            {/* Conversation Complete */}
+            {isConversationComplete && (
+              <div className="px-5 py-4 bg-green-50 dark:bg-green-900/10 text-center border-b border-green-200 dark:border-green-800/30">
+                <p className="text-sm font-bold text-green-800 dark:text-green-400">Kết thúc mô phỏng</p>
+                <p className="text-xs text-green-700 dark:text-green-500 mt-0.5">Phiên training đã hoàn tất. Chúc bạn luyện tập hiệu quả!</p>
+              </div>
+            )}
+
+            {/* Main Controls Wrapper */}
+            {!isConversationComplete && (
+              <div className="px-5 py-4 flex flex-col md:flex-row gap-4 items-center bg-gray-50/50 dark:bg-slate-900/20">
+                
+                {/* Mode Toggle - Compact */}
+                <div className="shrink-0 self-start md:self-center">
+                  <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-1 flex shadow-sm">
+                    <button
+                      onClick={() => setMode('voice')}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                        mode === 'voice' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <Mic className="w-4 h-4" /> Voice
+                    </button>
+                    <button
+                      onClick={() => setMode('text')}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                        mode === 'text' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/></svg>
+                      Text
+                    </button>
+                  </div>
+                </div>
+
+                {/* Input Area */}
+                <div className="flex-1 w-full">
+                  {mode === 'voice' ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-3 items-center">
+                        <Button
+                          onClick={isRecording ? stopRecording : startRecording}
+                          disabled={isLoading || isSpeaking}
+                          className={`flex-1 h-12 text-base font-semibold rounded-xl shadow-sm transition-all ${
+                            isRecording
+                              ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20 shadow-lg'
+                              : 'bg-orange-500 hover:bg-orange-600 text-white hover:shadow-orange-500/20 hover:shadow-lg'
+                          }`}
+                        >
+                          {isRecording ? (
+                            <><MicOff className="w-5 h-5 mr-2 animate-pulse" /> Dừng ghi âm</>
+                          ) : (
+                            <><Mic className="w-5 h-5 mr-2" /> Bắt đầu nói</>
+                          )}
+                        </Button>
+                        {isSpeaking && (
+                          <div className="flex items-center gap-2 px-4 py-2 h-12 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-sm border border-orange-100 dark:border-orange-900/40 shrink-0">
+                            <Volume2 className="w-4 h-4 animate-pulse text-orange-600" />
+                            <span className="text-orange-700 dark:text-orange-400 font-medium hidden sm:inline">AI đang nói...</span>
+                          </div>
+                        )}
+                        {isLoading && !isSpeaking && (
+                          <div className="flex items-center justify-center px-4 h-12 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shrink-0">
+                            <div className="flex gap-1">
+                              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* Transcription Preview */}
+                      {transcription && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2.5 rounded-xl text-sm text-blue-800 dark:text-blue-300 border border-blue-100 dark:border-blue-900/40 flex gap-2 items-start mt-2">
+                          <span className="font-semibold shrink-0 mt-0.5">Đang xử lý:</span> 
+                          <span className="italic">{transcription}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full">
+                      <TextChatInput
+                        onSendMessage={handleTextMessage}
+                        isLoading={isLoading}
+                        placeholder="Nhập câu tư vấn của bạn..."
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+
+        </div>
+
+        {/* ── Bottom Info Panels (Moved from Right Column) ── */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          {/* Product Details / Test Info */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm xl:col-span-1">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-orange-500" /> {simulationMode === 'knowledge_check' ? 'Thông tin bài kiểm tra' : 'Thông tin dự án'}
+            </h3>
+            <div className="space-y-3 text-sm">
+              <div className="bg-gray-50 dark:bg-slate-900/50 p-3 rounded-xl">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Dự án</p>
+                <p className="text-gray-900 dark:text-gray-200 font-medium">{productName}</p>
+              </div>
+              {productPrice && (
+                <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl border border-orange-100 dark:border-orange-500/20">
+                  <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 uppercase tracking-wider mb-1">Giá</p>
+                  <p className="text-orange-600 dark:text-orange-400 font-bold">{productPrice}</p>
+                </div>
+              )}
+              <div className="bg-gray-50 dark:bg-slate-900/50 p-3 rounded-xl">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Mô tả</p>
+                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{productDescription}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Key Features / Knowledge Content */}
+          {keyFeatures.length > 0 && (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm xl:col-span-1">
+              <h3 className="font-bold text-gray-900 dark:text-white mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-blue-500" /> {simulationMode === 'knowledge_check' ? 'Nội dung kiểm tra' : 'Key Features'}
+              </h3>
+              <ul className="space-y-2">
+                {keyFeatures.map((feature, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <span className="text-orange-500 shrink-0 mt-0.5">•</span>
+                    <span className="leading-relaxed">{feature}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {/* Text Mode Input */}
-          {!isConversationComplete && mode === 'text' && (
-            <div className="shrink-0 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2">
-              <TextChatInput
-                onSendMessage={handleTextMessage}
-                isLoading={isLoading}
-                placeholder="Type your response to the AI customer..."
-              />
+          {/* Sales Tips / Answer Hints */}
+          {salesTips.length > 0 && (
+            <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-2xl border border-orange-200 dark:border-orange-500/20 p-5 shadow-sm xl:col-span-1">
+              <h3 className="font-bold text-orange-900 dark:text-orange-400 mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4" /> {simulationMode === 'knowledge_check' ? 'Gợi ý trả lời' : 'Gợi ý cho Sales'}
+              </h3>
+              <ul className="space-y-2">
+                {salesTips.map((tip, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-orange-800 dark:text-orange-200">
+                    <ArrowRight className="w-3.5 h-3.5 shrink-0 mt-0.5 text-orange-500" />
+                    <span className="leading-relaxed">{tip}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
       </div>
 
-      {/* Sidebar */}
-      <div className="lg:col-span-1 min-h-0 overflow-y-auto space-y-6 lg:pl-2 custom-scrollbar">
-        {/* Customer Avatar */}
-        <CustomerAvatarCard 
-          isSpeaking={isSpeaking}
-          stage={currentStage}
-          customerName="AI Customer"
-        />
+        {/* ═══════════ RIGHT COLUMN — Info Panel ═══════════ */}
+        <div className="space-y-5">
 
-        {/* Product Info */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm">
-          <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-orange-600 dark:text-orange-400">📦</span>
-            Product Details
-          </h3>
-          <div className="space-y-3 text-sm">
-            <div className="bg-gray-50 dark:bg-slate-900/50 p-3 rounded-xl border border-transparent dark:border-slate-700">
-              <p className="font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Name</p>
-              <p className="text-gray-900 dark:text-gray-200 font-medium">{productName}</p>
-            </div>
-            <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl border border-orange-100 dark:border-orange-500/20">
-              <p className="font-semibold text-orange-800 dark:text-orange-400 text-xs uppercase tracking-wider mb-1">Price</p>
-              <p className="text-orange-600 dark:text-orange-400 font-bold text-lg">{productPrice}</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-900/50 p-3 rounded-xl border border-transparent dark:border-slate-700">
-              <p className="font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Key Features</p>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{productDescription}</p>
-            </div>
-          </div>
-        </div>
+          {/* Customer Avatar */}
+          <CustomerAvatarCard 
+            isSpeaking={isSpeaking}
+            stage={currentStage}
+            customerName="AI Khách hàng"
+          />
 
-        {/* Sales Score */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm">
-          <h3 className="font-bold text-gray-900 dark:text-white mb-4">Sales Performance</h3>
-          <div className="space-y-4">
-            {/* Current Turn Score */}
-            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-500/20 p-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-orange-900 dark:text-orange-400">Current Turn</span>
-                <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">{Math.round(salesScore)}</span>
+          {/* Sales Performance */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-4 text-sm uppercase tracking-wider">Sales Performance</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-500/20 p-3 text-center">
+                <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-1">Current Turn</p>
+                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{Math.round(salesScore)}</p>
               </div>
-              <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">{feedback}</p>
-            </div>
-
-            {/* Final Session Score */}
-            <div className="bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-500/20 p-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-green-900 dark:text-green-400">Session Avg</span>
-                <span className="text-3xl font-bold text-green-600 dark:text-green-400">
-                  {Math.round(finalSessionScore)}
-                </span>
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-500/20 p-3 text-center">
+                <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">Session Avg</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{Math.round(finalSessionScore)}</p>
               </div>
-              <p className="text-xs text-green-700 dark:text-green-300">
-                {turnScores.length} turn{turnScores.length !== 1 ? 's' : ''}
-              </p>
             </div>
-
             {/* Score Bar */}
-            <div>
-              <div className="h-2.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-orange-500 dark:bg-orange-500 rounded-full transition-all duration-500"
-                  style={{ width: `${salesScore}%` }}
-                />
+            <div className="mt-3">
+              <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, salesScore)}%` }} />
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{turnScores.length} lượt</p>
             </div>
           </div>
-        </div>
 
-        {/* Feedback */}
-        {feedback && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-4 shadow-sm">
-            <div className="flex gap-3">
-              {feedback.includes('Great') || feedback.includes('Excellent') ? (
-                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+          {/* Feedback */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
+              {feedback && (feedback.includes('đúng') || feedback.includes('tốt') || feedback.includes('xuất sắc')) ? (
+                <CheckCircle className="w-4 h-4 text-green-500" />
+              ) : feedback ? (
+                <AlertCircle className="w-4 h-4 text-orange-500" />
               ) : (
-                <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <MessageCircle className="w-4 h-4 text-gray-400" />
               )}
-              <div>
-                <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Feedback</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{feedback}</p>
+              {simulationMode === 'knowledge_check' ? 'Đánh giá kiến thức' : 'Feedback'}
+            </h3>
+            {feedback ? (
+              <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed space-y-2">
+                {feedback.split(/(?<=[.!?])\s+/).filter(Boolean).map((sentence: string, i: number) => (
+                  <p key={i} className="leading-relaxed">{sentence.trim()}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 dark:text-gray-500 italic leading-relaxed">
+                Hãy bắt đầu trả lời để nhận feedback chi tiết.
+              </p>
+            )}
+          </div>
+
+
+
+          {/* Stage Progress */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-400" /> Tiến trình
+            </h3>
+            <div className="space-y-2.5">
+              {['early', 'mid', 'closing'].map((stage) => (
+                <div key={stage} className="flex items-center gap-3">
+                  <div className={`w-2.5 h-2.5 rounded-full ${currentStage === stage ? 'bg-orange-500 shadow-md shadow-orange-500/40' : 'bg-gray-200 dark:bg-slate-700'}`} />
+                  <span className={`capitalize text-sm font-medium ${currentStage === stage ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>{stage}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-3">
+                <div className={`w-2.5 h-2.5 rounded-full ${isConversationComplete ? 'bg-green-500 shadow-md shadow-green-500/40' : 'bg-gray-200 dark:bg-slate-700'}`} />
+                <span className={`text-sm font-medium ${isConversationComplete ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>Complete</span>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Scenario */}
-        <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-2xl border border-orange-200 dark:border-orange-500/20 p-5 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 dark:bg-orange-500/10 rounded-full blur-3xl" />
-          <h4 className="font-bold text-orange-900 dark:text-orange-400 mb-3 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-full bg-white dark:bg-orange-900/40 flex items-center justify-center text-orange-600 dark:text-orange-400 shadow-sm border border-orange-100 dark:border-transparent">🎯</span>
-            Scenario
-          </h4>
-          <p className="text-sm text-orange-800 dark:text-orange-200 leading-relaxed relative z-10">{scenarioDescription}</p>
-        </div>
-
-        {/* Stage Progress */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5 shadow-sm">
-          <h4 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-            <span className="text-gray-400 dark:text-gray-500">📍</span> Stage Progress
-          </h4>
-          <div className="space-y-3 text-sm">
-            {['early', 'mid', 'closing'].map((stage) => (
-              <div key={stage} className="flex items-center gap-3">
-                <div
-                  className={`w-2.5 h-2.5 rounded-full shadow-sm ${
-                    currentStage === stage ? 'bg-orange-500 shadow-orange-500/50' : 'bg-gray-200 dark:bg-slate-700'
-                  }`}
-                />
-                <span className={`capitalize font-medium ${currentStage === stage ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{stage}</span>
-              </div>
-            ))}
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-2.5 h-2.5 rounded-full shadow-sm ${
-                  isConversationComplete ? 'bg-green-500 shadow-green-500/50' : 'bg-gray-200 dark:bg-slate-700'
-                }`}
-              />
-              <span className={`font-medium ${isConversationComplete ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>Complete</span>
-            </div>
+          {/* Scenario Description */}
+          <div className="bg-gray-50 dark:bg-slate-900/50 rounded-2xl border border-gray-200 dark:border-slate-700 p-5">
+            <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-2 text-xs uppercase tracking-wider">Bối cảnh</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{scenarioDescription}</p>
           </div>
-        </div>
       </div>
     </div>
-  </div>
   );
 }

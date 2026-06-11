@@ -9,5 +9,4 @@ node_modules/
 .env*.local
 .DS_Store
 tsconfig.tsbuildinfo
-test-elevenlabs.mp3
 PROJECT_OVERVIEW_VI.md

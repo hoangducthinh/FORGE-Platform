@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
-  const { user, logout, updatePassword } = useAuth();
+  const { user, logout, updatePassword, profile, role } = useAuth();
   const router = useRouter();
   
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -76,7 +76,7 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Name
                 </label>
-                <Input value={user?.name || ''} disabled />
+                <Input value={profile?.full_name || ''} disabled />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -88,7 +88,7 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Role
                 </label>
-                <Input value={user?.role.replace('_', ' ').charAt(0).toUpperCase() + user?.role.replace('_', ' ').slice(1) || ''} disabled />
+                <Input value={(role || '').replace('_', ' ').charAt(0).toUpperCase() + (role || '').replace('_', ' ').slice(1)} disabled />
               </div>
             </div>
           </div>
