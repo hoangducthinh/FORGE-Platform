@@ -171,22 +171,63 @@ export interface Database {
           id: string
           user_id: string
           course_id: string
+          lesson_id: string
           progress_percentage: number
+          is_completed: boolean
           last_accessed: string
         }
         Insert: {
           id?: string
           user_id: string
           course_id: string
+          lesson_id: string
           progress_percentage?: number
+          is_completed?: boolean
           last_accessed?: string
         }
         Update: {
           id?: string
           user_id?: string
           course_id?: string
+          lesson_id?: string
           progress_percentage?: number
+          is_completed?: boolean
           last_accessed?: string
+        }
+      },
+      learning_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          course_id: string
+          lesson_id: string
+          started_at: string
+          ended_at: string | null
+          duration_seconds: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          course_id: string
+          lesson_id: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          course_id?: string
+          lesson_id?: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number
+          created_at?: string
+          updated_at?: string
         }
       },
       simulator_sessions: {
@@ -293,3 +334,4 @@ export type CourseEnrollment = Database['public']['Tables']['course_enrollments'
 export type UserCourseProgress = Database['public']['Tables']['user_course_progress']['Row']
 export type SimulatorSession = Database['public']['Tables']['simulator_sessions']['Row']
 export type SimulatorMessage = Database['public']['Tables']['simulator_messages']['Row']
+export type LearningSession = Database['public']['Tables']['learning_sessions']['Row']

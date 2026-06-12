@@ -20,6 +20,7 @@ export default function DashboardPage() {
   const [courseDetails, setCourseDetails] = useState<any[]>([]);
   const [avgProgress, setAvgProgress] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
+  const [learningHours, setLearningHours] = useState('0.0');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -27,41 +28,85 @@ export default function DashboardPage() {
       if (!user) return;
       setIsLoading(true);
       try {
-        // Fetch enrollments with course details (Note: assuming FK relationship exists, or we fetch manually)
+        // Fetch enrollments with course details
         const { data: enrollments, error: enrollmentsError } = await (supabase as any)
           .from('course_enrollments')
           .select('course_id, courses (*)')
           .eq('user_id', user.id);
           
         if (enrollmentsError) throw enrollmentsError;
+
+        const courseIds = (enrollments || []).map((e: any) => e.course_id);
+
+        // Fetch lessons for enrolled courses to calculate progress
+        const { data: lessons, error: lessonsError } = await (supabase as any)
+          .from('lessons')
+          .select('id, course_id')
+          .in('course_id', courseIds.length ? courseIds : ['00000000-0000-0000-0000-000000000000']);
+
+        if (lessonsError) throw lessonsError;
         
         // Fetch user progress
         const { data: progressData, error: progressError } = await (supabase as any)
           .from('user_course_progress')
-          .select('*')
-          .eq('user_id', user.id);
+          .select('course_id, lesson_id, is_completed, progress_percentage')
+          .eq('user_id', user.id)
+          .in('course_id', courseIds.length ? courseIds : ['00000000-0000-0000-0000-000000000000']);
           
         if (progressError) throw progressError;
 
+        // Fetch learning hours
+        const { data: learningSessions, error: learningError } = await (supabase as any)
+          .from('learning_sessions')
+          .select('duration_seconds')
+          .eq('user_id', user.id);
+
+        if (learningError && learningError.code !== '42P01') { // Ignore if table doesn't exist yet
+           console.error('Learning session error:', learningError);
+        }
+
+        let totalDurationSec = 0;
+        (learningSessions || []).forEach((s: any) => {
+           totalDurationSec += s.duration_seconds || 0;
+        });
+        setLearningHours((totalDurationSec / 3600).toFixed(1));
+
         // Process data
+        let totalCompletedLessonsAll = 0;
+        let totalLessonsAll = lessons?.length || 0;
+        let certCount = 0;
+
         const mappedCourses = (enrollments || []).map((e: any) => {
-          // Depending on whether it's a join or embedded object, e.courses might be a single object or array
           const course = Array.isArray(e.courses) ? e.courses[0] : e.courses;
-          const progress = progressData?.find((p: any) => p.course_id === e.course_id);
+          const courseLessons = (lessons || []).filter((l: any) => l.course_id === e.course_id);
+          const courseProgress = (progressData || []).filter((p: any) => p.course_id === e.course_id && (p.is_completed || p.progress_percentage >= 100));
+          
+          const completedLessonsCount = courseProgress.length;
+          totalCompletedLessonsAll += completedLessonsCount;
+
+          let progressPercentage = 0;
+          if (courseLessons.length > 0) {
+            progressPercentage = Math.round((completedLessonsCount / courseLessons.length) * 100);
+            if (completedLessonsCount === courseLessons.length) {
+              certCount++;
+            }
+          }
+
           return {
             courseId: e.course_id,
             course: course,
-            progressPercentage: progress ? progress.progress_percentage : 0,
-            status: progress?.progress_percentage === 100 ? 'completed' : 'in_progress'
+            progressPercentage,
+            status: progressPercentage === 100 ? 'completed' : 'in_progress'
           };
         });
         
         setCourseDetails(mappedCourses);
+        setCompletedCount(certCount);
         
-        if (mappedCourses.length > 0) {
-          const totalProgress = mappedCourses.reduce((sum: number, item: any) => sum + item.progressPercentage, 0);
-          setAvgProgress(Math.round(totalProgress / mappedCourses.length));
-          setCompletedCount(mappedCourses.filter((m: any) => m.status === 'completed').length);
+        if (totalLessonsAll > 0) {
+          setAvgProgress(Math.round((totalCompletedLessonsAll / totalLessonsAll) * 100));
+        } else {
+          setAvgProgress(0);
         }
         
       } catch (err) {
@@ -93,6 +138,12 @@ export default function DashboardPage() {
 
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center min-h-[50vh]">
+              <div className="animate-spin w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400 font-medium">Đang tải bảng điều khiển...</p>
+            </div>
+          ) : (
           <motion.div initial="hidden" animate="visible" variants={containerVariants}>
             {/* Welcome Header */}
             <motion.div variants={itemVariants}>
@@ -170,7 +221,7 @@ export default function DashboardPage() {
                 {
                   icon: Clock,
                   label: 'Learning Hours',
-                  value: '24.5',
+                  value: learningHours,
                   color: 'orange',
                 },
               ].map((stat, i) => (
@@ -242,6 +293,7 @@ export default function DashboardPage() {
 
 
           </motion.div>
+          )}
         </main>
 
         {/* AI Chat */}

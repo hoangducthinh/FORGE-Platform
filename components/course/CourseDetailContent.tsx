@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
 import { ChevronDown, ChevronUp, BookOpen, CheckCircle2, Play, FileText, AlertCircle, Bot, Plus, Pencil } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Course, Lesson } from '@/lib/supabase/database.types';
 import AISalesSimulator from '@/components/lesson/AISalesSimulator';
 import { createClient } from '@/lib/supabase/client';
@@ -80,11 +80,90 @@ export default function CourseDetailContent({
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
   const [isUpdatingProgress, setIsUpdatingProgress] = useState(false);
 
-  // Can this user manage lessons in this course?
   const canManage =
     role === 'admin' ||
     role === 'manager' ||
     (isPremium && (course as any).created_by === user?.id);
+
+  // Tracking Learning Sessions
+  const currentSessionIdRef = useRef<string | null>(null);
+  const sessionStartTimeRef = useRef<Date | null>(null);
+
+  useEffect(() => {
+    const endSession = () => {
+      const sessionId = currentSessionIdRef.current;
+      const startTime = sessionStartTimeRef.current;
+      
+      if (!sessionId || !startTime || !user) return;
+      
+      const endTime = new Date();
+      const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+      
+      if (duration > 0) {
+        // Fire and forget update
+        (supabase as any).from('learning_sessions').update({
+          ended_at: endTime.toISOString(),
+          duration_seconds: duration
+        }).eq('id', sessionId).then();
+      }
+      
+      currentSessionIdRef.current = null;
+      sessionStartTimeRef.current = null;
+    };
+
+    // Whenever activeLessonId changes, end the previous session and start a new one
+    endSession();
+
+    if (activeLessonId && user) {
+      const startSession = async () => {
+        const startTime = new Date();
+        try {
+          const { data, error } = await (supabase as any).from('learning_sessions').insert({
+            user_id: user.id,
+            course_id: courseId,
+            lesson_id: activeLessonId,
+            started_at: startTime.toISOString()
+          }).select('id').single();
+          
+          if (!error && data) {
+            currentSessionIdRef.current = data.id;
+            sessionStartTimeRef.current = startTime;
+          }
+        } catch (err) {
+          console.error('Error starting learning session', err);
+        }
+      };
+      startSession();
+    }
+
+    return () => {
+      endSession();
+    };
+  }, [activeLessonId, user, courseId, supabase]);
+
+  // Handle page unload / close tab
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const sessionId = currentSessionIdRef.current;
+      const startTime = sessionStartTimeRef.current;
+      if (sessionId && startTime) {
+        const duration = Math.floor((new Date().getTime() - startTime.getTime()) / 1000);
+        if (duration > 0) {
+          // Can't use async here reliably, but fetch with keepalive is good if we had an API.
+          // We will attempt a synchronous-like beacon if we had an endpoint.
+          // Since we use Supabase JS, it might be dropped, but we try.
+          const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/learning_sessions?id=eq.${sessionId}`;
+          navigator.sendBeacon(url, JSON.stringify({
+             ended_at: new Date().toISOString(),
+             duration_seconds: duration
+          }));
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     async function loadProgress() {
