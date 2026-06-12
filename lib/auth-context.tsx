@@ -56,7 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 full_name: '',
                 role: 'student' as UserRole,
                 plan: 'free' as UserPlan,
-                is_premium: false
+                is_premium: false,
+                subscription_status: 'active',
+                seat_limit: 1,
+                seats_used: 1
              };
              await (supabase.from('profiles') as any).insert(newProfile as any);
              profileData = newProfile as any;
@@ -97,7 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 full_name: '',
                 role: 'student' as UserRole,
                 plan: 'free' as UserPlan,
-                is_premium: false
+                is_premium: false,
+                subscription_status: 'active',
+                seat_limit: 1,
+                seats_used: 1
              };
              await (supabase.from('profiles') as any).insert(newProfile as any);
              profileData = newProfile as any;
@@ -167,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       role: profile?.role || null,
       plan: profile?.plan || null,
-      isPremium: profile?.is_premium || false,
+      isPremium: profile?.plan === 'team' || profile?.plan === 'enterprise' || profile?.is_premium === true,
       isLoading, 
       signup, 
       login, 

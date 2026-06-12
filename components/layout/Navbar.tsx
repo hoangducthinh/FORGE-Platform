@@ -51,14 +51,14 @@ export function Navbar() {
             </Link>
 
             {/* student / free */}
-            {role === 'student' && !isPremium && (
+            {role === 'student' && plan === 'free' && (
               <Link href="/upgrade" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 text-sm font-bold flex items-center gap-1">
-                <span className="bg-gradient-to-r from-orange-400 to-red-500 text-transparent bg-clip-text">Upgrade Premium</span>
+                <span className="bg-gradient-to-r from-orange-400 to-red-500 text-transparent bg-clip-text">Upgrade</span>
               </Link>
             )}
 
-            {/* student / premium */}
-            {(role === 'student' && isPremium) && (
+            {/* student / paid */}
+            {(role === 'student' && (plan === 'team' || plan === 'enterprise')) && (
               <>
                 <Link href="/courses/create" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
                   Create Course
@@ -121,7 +121,8 @@ export function Navbar() {
                   </div>
                   <span className="hidden sm:inline text-sm font-medium flex items-center gap-2">
                     {profile?.full_name || user.email?.split('@')[0] || 'User'}
-                    {isPremium && <span className="bg-gradient-to-r from-orange-400 to-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">PRO</span>}
+                    {plan === 'team' && <span className="bg-gradient-to-r from-orange-400 to-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">TEAM</span>}
+                    {plan === 'enterprise' && <span className="bg-gradient-to-r from-slate-700 to-slate-900 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">ENT</span>}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
@@ -130,7 +131,7 @@ export function Navbar() {
                   {user.email}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                  Role: {role} {isPremium ? '(Premium)' : '(Free)'}
+                  Role: {role} ({plan})
                 </DropdownMenuItem>
                 <div className="my-1 border-t dark:border-slate-700" />
                 <DropdownMenuItem asChild>
@@ -162,12 +163,12 @@ export function Navbar() {
             <Link href="/courses" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
               Courses
             </Link>
-            {role === 'student' && !isPremium && (
+            {role === 'student' && plan === 'free' && (
               <Link href="/upgrade" className="block px-4 py-2 text-sm text-orange-600 font-bold hover:bg-orange-50 dark:hover:bg-orange-900/20">
-                Upgrade Premium
+                Upgrade
               </Link>
             )}
-            {(role === 'student' && isPremium) && (
+            {(role === 'student' && (plan === 'team' || plan === 'enterprise')) && (
               <>
                 <Link href="/courses/create" className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800">
                   Create Course

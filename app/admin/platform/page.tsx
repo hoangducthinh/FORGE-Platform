@@ -23,6 +23,7 @@ export default function PlatformAdminPage() {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<string>('student');
   const [editPlan, setEditPlan] = useState<string>('free');
+  const [editSeatLimit, setEditSeatLimit] = useState<number>(1);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -57,15 +58,15 @@ export default function PlatformAdminPage() {
   const managers = profiles.filter((u) => u.role === 'manager');
   const admins = profiles.filter((u) => u.role === 'admin');
   
-  const premiumUsers = profiles.filter((p) => {
-    const activeUntilOk = !p.premium_until || new Date(p.premium_until) > new Date();
-    return activeUntilOk && (p.is_premium === true || p.plan === 'premium');
+  const paidUsers = profiles.filter((p) => {
+    return p.plan === 'team' || p.plan === 'enterprise' || p.is_premium === true;
   });
 
   const startEdit = (user: Profile) => {
     setEditingUserId(user.id);
     setEditRole(user.role || 'student');
     setEditPlan(user.plan || 'free');
+    setEditSeatLimit(user.seat_limit || 1);
   };
 
   const saveEdit = async (userId: string) => {
@@ -73,7 +74,7 @@ export default function PlatformAdminPage() {
       const res = await fetch('/api/admin/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, role: editRole, plan: editPlan })
+        body: JSON.stringify({ userId, role: editRole, plan: editPlan, seat_limit: editSeatLimit })
       });
       if (res.ok) {
         setEditingUserId(null);
@@ -130,8 +131,8 @@ export default function PlatformAdminPage() {
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">Premium Users</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{premiumUsers.length}</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">Paid Plans</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{paidUsers.length}</p>
                 </div>
                 <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-orange-100 text-orange-600">
                   <Zap className="w-5 h-5" />
@@ -186,7 +187,8 @@ export default function PlatformAdminPage() {
                         <th className="px-6 py-3 font-medium text-gray-900 dark:text-gray-200">Tên</th>
                         <th className="px-6 py-3 font-medium text-gray-900 dark:text-gray-200">Role</th>
                         <th className="px-6 py-3 font-medium text-gray-900 dark:text-gray-200">Gói</th>
-                        <th className="px-6 py-3 font-medium text-gray-900 dark:text-gray-200">Trạng thái Premium</th>
+                        <th className="px-6 py-3 font-medium text-gray-900 dark:text-gray-200">Seats (Used/Limit)</th>
+                        <th className="px-6 py-3 font-medium text-gray-900 dark:text-gray-200">Subscription</th>
                         <th className="px-6 py-3 font-medium text-gray-900 dark:text-gray-200 text-right">Thao tác</th>
                       </tr>
                     </thead>
@@ -226,27 +228,43 @@ export default function PlatformAdminPage() {
                                 className="border rounded px-2 py-1 bg-white dark:bg-slate-800 dark:text-white"
                               >
                                 <option value="free">Free</option>
-                                <option value="premium">Premium</option>
+                                <option value="team">Team</option>
+                                <option value="enterprise">Enterprise</option>
                               </select>
                             ) : (
                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                u.plan === 'premium' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
+                                u.plan === 'team' ? 'bg-orange-100 text-orange-800' : 
+                                u.plan === 'enterprise' ? 'bg-slate-700 text-white' : 
+                                'bg-gray-100 text-gray-800'
                               }`}>
                                 {u.plan || 'free'}
                               </span>
                             )}
                           </td>
 
+                          <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                            {editingUserId === u.id ? (
+                              <input 
+                                type="number" 
+                                value={editSeatLimit} 
+                                onChange={(e) => setEditSeatLimit(parseInt(e.target.value) || 1)}
+                                className="w-16 border rounded px-2 py-1 bg-white dark:bg-slate-800 dark:text-white"
+                              />
+                            ) : (
+                              <span>{u.seats_used || 0} / {u.seat_limit || 1}</span>
+                            )}
+                          </td>
+
                           <td className="px-6 py-4">
                             <div className="flex flex-col">
                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium w-max ${
-                                u.is_premium ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                u.subscription_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                               }`}>
-                                {u.is_premium ? 'Có' : 'Không'}
+                                {u.subscription_status || 'active'}
                               </span>
-                              {u.premium_until && (
+                              {(u.subscription_ends_at || u.premium_until) && (
                                 <span className="text-xs text-gray-500 mt-1">
-                                  Đến: {new Date(u.premium_until).toLocaleDateString('vi-VN')}
+                                  Hết hạn: {new Date(u.subscription_ends_at || u.premium_until as string).toLocaleDateString('vi-VN')}
                                 </span>
                               )}
                             </div>

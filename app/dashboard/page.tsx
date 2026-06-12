@@ -14,7 +14,7 @@ import { motion } from 'framer-motion';
 import { SimulatorProgressChart } from '@/components/simulator/SimulatorProgressChart';
 
 export default function DashboardPage() {
-  const { user, profile, role, isPremium } = useAuth();
+  const { user, profile, role, isPremium, plan } = useAuth();
   const supabase = createClient();
   
   const [courseDetails, setCourseDetails] = useState<any[]>([]);
@@ -73,7 +73,7 @@ export default function DashboardPage() {
         // Fetch user progress
         const { data: progressData, error: progressError } = await (supabase as any)
           .from('user_course_progress')
-          .select('course_id, lesson_id, is_completed, progress_percentage')
+          .select('course_id, lesson_id, is_completed, progress_percent')
           .eq('user_id', currentUser.id)
           .in('course_id', courseIds.length ? courseIds : ['00000000-0000-0000-0000-000000000000']);
           
@@ -105,7 +105,7 @@ export default function DashboardPage() {
         const mappedCourses = (rawEnrollments || []).map((e: any) => {
           const course = coursesData.find((c: any) => c.id === e.course_id);
           const courseLessons = (lessons || []).filter((l: any) => l.course_id === e.course_id);
-          const courseProgress = (progressData || []).filter((p: any) => p.course_id === e.course_id && (p.is_completed || p.progress_percentage >= 100));
+          const courseProgress = (progressData || []).filter((p: any) => p.course_id === e.course_id && (p.is_completed || p.progress_percent >= 100));
           
           const completedLessonsCount = courseProgress.length;
           totalCompletedLessonsAll += completedLessonsCount;
@@ -176,7 +176,8 @@ export default function DashboardPage() {
               <div className="mb-8">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
                   Chào mừng trở lại, {profile?.full_name || user?.email?.split('@')[0]}
-                  {isPremium && <span className="bg-gradient-to-r from-orange-400 to-red-500 text-white text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">Premium</span>}
+                  {plan === 'team' && <span className="bg-gradient-to-r from-orange-400 to-red-500 text-white text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">Team</span>}
+                  {plan === 'enterprise' && <span className="bg-gradient-to-r from-slate-700 to-slate-900 text-white text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">Enterprise</span>}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
                   Tiếp tục hành trình học tập và rèn luyện kỹ năng của bạn
@@ -205,11 +206,11 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* Premium Quick Links */}
-              {(role === 'student' && isPremium) && (
+              {/* Paid Plan Quick Links */}
+              {(role === 'student' && (plan === 'team' || plan === 'enterprise')) && (
                 <div className="mb-8 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-6">
                   <h2 className="text-xl font-bold text-orange-900 dark:text-orange-100 mb-4 flex items-center gap-2">
-                    <Award className="w-5 h-5" /> Khu Vực Premium
+                    <Award className="w-5 h-5" /> Khu Vực Đào Tạo ({plan === 'enterprise' ? 'Enterprise' : 'Team'})
                   </h2>
                   <div className="flex gap-4">
                     <Button className="bg-orange-500 hover:bg-orange-600 text-white" asChild>

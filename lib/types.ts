@@ -1,6 +1,6 @@
 // User types
 export type UserRole = 'student' | 'manager' | 'admin';
-export type UserPlan = 'free' | 'premium';
+export type UserPlan = 'free' | 'team' | 'enterprise';
 
 export interface Profile {
   id: string;
@@ -10,6 +10,12 @@ export interface Profile {
   plan: UserPlan;
   is_premium: boolean;
   premium_until: Date | string | null;
+  subscription_status: 'active' | 'trialing' | 'expired' | 'cancelled' | null;
+  subscription_started_at: Date | string | null;
+  subscription_ends_at: Date | string | null;
+  organization_id: string | null;
+  seat_limit: number;
+  seats_used: number;
   created_at: Date | string;
 }
 

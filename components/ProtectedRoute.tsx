@@ -3,15 +3,17 @@
 import { useAuth } from '@/lib/auth-context';
 import { redirect } from 'next/navigation';
 import { ReactNode } from 'react';
-import { UserRole } from '@/lib/types';
+import { UserRole, UserPlan } from '@/lib/types';
+import Link from 'next/link';
 
 interface ProtectedRouteProps {
   children: ReactNode;
   requiredRoles?: UserRole[];
+  requiredPlans?: UserPlan[];
 }
 
-export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps) {
-  const { user, role, isLoading } = useAuth();
+export function ProtectedRoute({ children, requiredRoles, requiredPlans }: ProtectedRouteProps) {
+  const { user, role, plan, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -42,6 +44,25 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
           <button onClick={() => window.history.back()} className="px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition">
             Quay lại
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (requiredPlans && plan && !requiredPlans.includes(plan)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Yêu cầu nâng cấp</h1>
+          <p className="text-gray-600 mb-6">Tính năng này yêu cầu gói {requiredPlans.includes('enterprise') ? 'Enterprise' : 'Team hoặc Enterprise'}.</p>
+          <Link href="/upgrade" className="px-4 py-2 bg-orange-600 text-white rounded-md font-medium hover:bg-orange-700 transition inline-block">
+            Nâng cấp ngay
+          </Link>
         </div>
       </div>
     );

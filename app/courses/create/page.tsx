@@ -66,7 +66,7 @@ export default function CreateCoursePage() {
     return (
       <ProtectedRoute>
         <div className="min-h-screen flex items-center justify-center">
-          <p>Bạn cần nâng cấp Premium để tạo khóa học.</p>
+          <p>Bạn cần nâng cấp gói Team hoặc Enterprise để tạo khóa học.</p>
         </div>
       </ProtectedRoute>
     );

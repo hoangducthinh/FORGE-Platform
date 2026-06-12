@@ -199,7 +199,7 @@ export default function CourseDetailContent({
           course_id: courseId,
           lesson_id: lessonId,
           is_completed: true,
-          progress_percentage: 100,
+          progress_percent: 100,
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id, course_id, lesson_id' });
 

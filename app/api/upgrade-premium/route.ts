@@ -14,9 +14,12 @@ export async function POST(request: NextRequest) {
     const { error } = await (supabase
       .from('profiles') as any)
       .update({
-        plan: 'premium',
+        plan: 'team',
         is_premium: true,
-        premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        subscription_status: 'active',
+        subscription_started_at: new Date().toISOString(),
+        subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        seat_limit: 20
       } as any)
       .eq('id', session.user.id);
 

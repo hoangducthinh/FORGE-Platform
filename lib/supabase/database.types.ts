@@ -18,9 +18,15 @@ export interface Database {
           email: string
           full_name: string
           role: 'student' | 'manager' | 'admin'
-          plan: 'free' | 'premium'
+          plan: 'free' | 'team' | 'enterprise'
           is_premium: boolean
           premium_until: string | null
+          subscription_status: 'active' | 'trialing' | 'expired' | 'cancelled' | null
+          subscription_started_at: string | null
+          subscription_ends_at: string | null
+          organization_id: string | null
+          seat_limit: number
+          seats_used: number
           created_at: string
           updated_at: string
         }
@@ -29,9 +35,15 @@ export interface Database {
           email: string
           full_name?: string
           role?: 'student' | 'manager' | 'admin'
-          plan?: 'free' | 'premium'
+          plan?: 'free' | 'team' | 'enterprise'
           is_premium?: boolean
           premium_until?: string | null
+          subscription_status?: 'active' | 'trialing' | 'expired' | 'cancelled' | null
+          subscription_started_at?: string | null
+          subscription_ends_at?: string | null
+          organization_id?: string | null
+          seat_limit?: number
+          seats_used?: number
           created_at?: string
           updated_at?: string
         }
@@ -40,9 +52,15 @@ export interface Database {
           email?: string
           full_name?: string
           role?: 'student' | 'manager' | 'admin'
-          plan?: 'free' | 'premium'
+          plan?: 'free' | 'team' | 'enterprise'
           is_premium?: boolean
           premium_until?: string | null
+          subscription_status?: 'active' | 'trialing' | 'expired' | 'cancelled' | null
+          subscription_started_at?: string | null
+          subscription_ends_at?: string | null
+          organization_id?: string | null
+          seat_limit?: number
+          seats_used?: number
           created_at?: string
           updated_at?: string
         }
@@ -172,7 +190,7 @@ export interface Database {
           user_id: string
           course_id: string
           lesson_id: string
-          progress_percentage: number
+          progress_percent: number
           is_completed: boolean
           last_accessed: string
         }
@@ -181,7 +199,7 @@ export interface Database {
           user_id: string
           course_id: string
           lesson_id: string
-          progress_percentage?: number
+          progress_percent?: number
           is_completed?: boolean
           last_accessed?: string
         }
@@ -190,7 +208,7 @@ export interface Database {
           user_id?: string
           course_id?: string
           lesson_id?: string
-          progress_percentage?: number
+          progress_percent?: number
           is_completed?: boolean
           last_accessed?: string
         }
