@@ -25,18 +25,42 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadDashboardData() {
-      if (!user) return;
       setIsLoading(true);
       try {
-        // Fetch enrollments with course details
-        const { data: enrollments, error: enrollmentsError } = await (supabase as any)
-          .from('course_enrollments')
-          .select('course_id, courses (*)')
-          .eq('user_id', user.id);
-          
-        if (enrollmentsError) throw enrollmentsError;
+        // Fetch current user explicitly as requested
+        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+        if (userError || !currentUser) {
+          console.error('User not found or error fetching user:', userError);
+          setIsLoading(false);
+          return;
+        }
 
-        const courseIds = (enrollments || []).map((e: any) => e.course_id);
+        // Fetch enrollments without relationship first
+        const { data: rawEnrollments, error: enrollmentsError } = await (supabase as any)
+          .from('course_enrollments')
+          .select('id, user_id, course_id')
+          .eq('user_id', currentUser.id);
+          
+        if (enrollmentsError) {
+          console.error("Enrollments query error:", enrollmentsError, "for user:", currentUser.email, currentUser.id);
+          throw enrollmentsError;
+        }
+
+        const courseIds = (rawEnrollments || []).map((e: any) => e.course_id);
+        
+        let coursesData: any[] = [];
+        if (courseIds.length > 0) {
+          const { data: cData, error: coursesError } = await (supabase as any)
+            .from('courses')
+            .select('*')
+            .in('id', courseIds);
+            
+          if (coursesError) {
+            console.error("Courses query error:", coursesError);
+          } else {
+            coursesData = cData || [];
+          }
+        }
 
         // Fetch lessons for enrolled courses to calculate progress
         const { data: lessons, error: lessonsError } = await (supabase as any)
@@ -50,16 +74,18 @@ export default function DashboardPage() {
         const { data: progressData, error: progressError } = await (supabase as any)
           .from('user_course_progress')
           .select('course_id, lesson_id, is_completed, progress_percentage')
-          .eq('user_id', user.id)
+          .eq('user_id', currentUser.id)
           .in('course_id', courseIds.length ? courseIds : ['00000000-0000-0000-0000-000000000000']);
           
-        if (progressError) throw progressError;
+        if (progressError) {
+          console.error("Progress query error:", progressError);
+        }
 
         // Fetch learning hours
         const { data: learningSessions, error: learningError } = await (supabase as any)
           .from('learning_sessions')
           .select('duration_seconds')
-          .eq('user_id', user.id);
+          .eq('user_id', currentUser.id);
 
         if (learningError && learningError.code !== '42P01') { // Ignore if table doesn't exist yet
            console.error('Learning session error:', learningError);
@@ -76,8 +102,8 @@ export default function DashboardPage() {
         let totalLessonsAll = lessons?.length || 0;
         let certCount = 0;
 
-        const mappedCourses = (enrollments || []).map((e: any) => {
-          const course = Array.isArray(e.courses) ? e.courses[0] : e.courses;
+        const mappedCourses = (rawEnrollments || []).map((e: any) => {
+          const course = coursesData.find((c: any) => c.id === e.course_id);
           const courseLessons = (lessons || []).filter((l: any) => l.course_id === e.course_id);
           const courseProgress = (progressData || []).filter((p: any) => p.course_id === e.course_id && (p.is_completed || p.progress_percentage >= 100));
           
