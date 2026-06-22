@@ -2,14 +2,16 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 
-export default function SignupPage() {
+import { Suspense } from 'react';
+
+function SignupContent() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +21,8 @@ export default function SignupPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const { signup } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get('returnUrl');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +46,11 @@ export default function SignupPage() {
       
       setIsSuccess(true);
       // Redirect to login - user can log in immediately
-      router.push('/auth/login');
+      if (returnUrl) {
+        router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+      } else {
+        router.push('/auth/login');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed');
       setIsLoading(false);
@@ -173,7 +181,7 @@ export default function SignupPage() {
           <div className="mt-6 text-center">
             <p className="text-gray-600 dark:text-gray-400 text-sm">
               Already have an account?{' '}
-              <Link href="/auth/login" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-semibold">
+              <Link href={returnUrl ? `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}` : "/auth/login"} className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-semibold">
                 Sign in
               </Link>
             </p>
@@ -181,5 +189,13 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <SignupContent />
+    </Suspense>
   );
 }

@@ -74,6 +74,13 @@ export default function CoursesPage() {
         return;
       }
 
+      // Kiểm tra self enroll
+      const course = courses.find(c => c.id === courseId);
+      if (course && course.visibility !== 'public' && !course.allow_self_enroll) {
+         alert('Khóa học này không cho phép tự đăng ký. Bạn cần được mời để tham gia.');
+         return;
+      }
+
       // Insert enrollment
       const { error } = await (supabase as any)
         .from('course_enrollments')
@@ -203,12 +210,24 @@ export default function CoursesPage() {
                     <div className="p-6 flex flex-col flex-1">
                       <div className="mb-4">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-3 py-1 rounded-full">
-                            {course.category}
-                          </span>
+                          <div className="flex gap-2">
+                            <span className="text-xs font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-3 py-1 rounded-full">
+                              {course.category}
+                            </span>
+                            {course.visibility === 'private' && (
+                              <span className="text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full">
+                                Riêng tư
+                              </span>
+                            )}
+                            {course.visibility === 'unlisted' && (
+                              <span className="text-xs font-semibold bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 px-3 py-1 rounded-full">
+                                Ẩn
+                              </span>
+                            )}
+                          </div>
                           {isEnrolled && (
                             <span className="text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-3 py-1 rounded-full">
-                              Enrolled
+                              Đã tham gia
                             </span>
                           )}
                         </div>

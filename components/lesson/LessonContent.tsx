@@ -106,6 +106,10 @@ export default function LessonContent({
                 productDescription={simulatorData[lesson.id].productDescription}
                 productPrice={simulatorData[lesson.id].productPrice}
                 scenarioDescription={simulatorData[lesson.id].scenarioDescription}
+                simulatorConfig={{
+                  mode: 'sales_simulation',
+                  sessionSettings: { estimatedMinutes: 15, maxTurns: 10, autoCompleteScore: 80 }
+                } as any}
                 courseId={course.id}
                 lessonId={lesson.id}
               />

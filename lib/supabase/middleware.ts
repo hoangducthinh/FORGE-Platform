@@ -35,21 +35,28 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  // IMPORTANT: If you remove getUser() and you use server-side rendering
-  // with the Supabase client, your users may be randomly logged out.
+  // For Vercel Edge Middleware, getUser() can cause MIDDLEWARE_INVOCATION_TIMEOUT
+  // due to network latency to the Auth server. Using getSession() is faster as it
+  // relies on the JWT in the cookie, though it may refresh if expired.
+  // We rely on Server Components and RLS for actual secure authorization.
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  if (
-    // protect the following routes from unauthenticated users
-    (request.nextUrl.pathname.startsWith('/dashboard') ||
-     request.nextUrl.pathname.startsWith('/courses') ||
-     request.nextUrl.pathname.startsWith('/quiz') ||
-     request.nextUrl.pathname.startsWith('/admin') ||
-     request.nextUrl.pathname.startsWith('/settings')) &&
-    !user
-  ) {
+  const pathname = request.nextUrl.pathname;
+
+  // Protect specific routes from unauthenticated users
+  const isProtectedRoute = 
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/my-courses') ||
+    pathname === '/courses/create' ||
+    pathname.match(/^\/courses\/[^/]+\/edit/) ||
+    pathname.match(/^\/courses\/[^/]+\/lessons\/create/) ||
+    pathname.match(/^\/courses\/[^/]+\/members/);
+
+  if (isProtectedRoute && !session) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'

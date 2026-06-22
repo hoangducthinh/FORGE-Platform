@@ -41,6 +41,7 @@ interface AISalesSimulatorProps {
   onBack?: () => void;
   onLessonComplete?: () => void;
   simulationMode?: 'sales' | 'knowledge_check';
+  simulatorConfig?: any;
 }
 
 export default function AISalesSimulator({
@@ -56,6 +57,7 @@ export default function AISalesSimulator({
   onBack,
   onLessonComplete,
   simulationMode = 'sales',
+  simulatorConfig,
 }: AISalesSimulatorProps) {
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -74,6 +76,9 @@ export default function AISalesSimulator({
   const [closingOutcome, setClosingOutcome] = useState<'success' | 'failure' | null>(null);
   const [persona, setPersona] = useState<'skeptical' | 'warm_lead' | 'random'>('random');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [maxDurationSeconds, setMaxDurationSeconds] = useState(simulatorConfig?.sessionSettings?.estimatedMinutes ? simulatorConfig.sessionSettings.estimatedMinutes * 60 : 900);
+
   const [isInitializingHistory, setIsInitializingHistory] = useState(true);
 
   useEffect(() => {
@@ -82,6 +87,23 @@ export default function AISalesSimulator({
     }
   }, [isConversationComplete, onLessonComplete]);
   const supabase: any = createClient();
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (sessionId && !isConversationComplete && !isInitializingHistory) {
+      interval = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [sessionId, isConversationComplete, isInitializingHistory]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -116,6 +138,8 @@ export default function AISalesSimulator({
           setSessionId(sessionData.id);
           setSalesScore(sessionData.current_score);
           setCurrentStage(sessionData.current_stage);
+          setElapsedSeconds(sessionData.elapsed_seconds || 0);
+          setMaxDurationSeconds(sessionData.max_duration_seconds || maxDurationSeconds);
           setFeedback(sessionData.last_feedback || 'Hãy tiếp tục tư vấn.');
 
           const { data: messages, error: messagesError } = await supabase
@@ -145,6 +169,8 @@ export default function AISalesSimulator({
               course_id: courseId,
               lesson_id: lessonId,
               status: 'in_progress',
+              started_at: new Date().toISOString(),
+              max_duration_seconds: maxDurationSeconds,
               current_stage: 'early',
               current_score: 50,
               session_avg: 50,
@@ -355,6 +381,7 @@ export default function AISalesSimulator({
           sessionScore: currentSessionScore,
           scenario: persona,
           mode: simulationMode,
+          simulatorConfig,
         }),
       });
 
@@ -393,7 +420,9 @@ export default function AISalesSimulator({
               content: aiMessage,
               response_source: responseSource,
               score_delta: data.scoreDelta,
-              stage: stage
+              stage: stage,
+              turn_score: data.turnScore,
+              topic_key: data.topicKey
             }).then(({ error }: any) => { if (error) console.warn(error); });
 
             const newTurnsCount = Math.floor((conversation.length + 2) / 2);
@@ -403,6 +432,7 @@ export default function AISalesSimulator({
                session_avg: finalSessionScore,
                turns_count: newTurnsCount,
                last_feedback: feedbackText,
+               elapsed_seconds: elapsedSeconds,
                updated_at: new Date().toISOString(),
                status: isComplete ? 'completed' : 'in_progress'
             }).eq('id', sessionId).then(({ error }: any) => { if (error) console.warn(error); });
@@ -488,6 +518,8 @@ export default function AISalesSimulator({
         course_id: courseId,
         lesson_id: lessonId,
         status: 'in_progress',
+              started_at: new Date().toISOString(),
+              max_duration_seconds: maxDurationSeconds,
         current_stage: 'early',
         current_score: 50,
         session_avg: 50,
@@ -537,13 +569,17 @@ export default function AISalesSimulator({
                   <span className="text-lg leading-none mb-0.5">←</span>
                 </button>
               )}
+              
               <div>
                 <h2 className="font-bold text-lg">{productName}</h2>
-                <p className="text-sm text-orange-100 mt-0.5">
-                  Stage: <span className="capitalize font-medium">{currentStage}</span>
-                  {isConversationComplete && <span className="ml-2">✓ Completed</span>}
-                </p>
+                <div className="flex gap-4 text-sm text-orange-100 mt-0.5">
+                  <p>Stage: <span className="capitalize font-medium">{currentStage}</span></p>
+                  <p>Lượt: <span className="font-medium">{Math.floor((conversation.length + 1) / 2)}</span> {simulatorConfig?.sessionSettings?.maxTurns ? `/ ${simulatorConfig.sessionSettings.maxTurns}` : ''}</p>
+                  <p>Thời gian: <span className="font-medium">{formatTime(elapsedSeconds)} / {formatTime(maxDurationSeconds)}</span></p>
+                  {isConversationComplete && <span className="ml-2 text-white">✓ Completed</span>}
+                </div>
               </div>
+
             </div>
                           <button
                 onClick={handleRestart}

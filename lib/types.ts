@@ -35,12 +35,38 @@ export interface Course {
   id: string;
   title: string;
   description: string;
+  thumbnail_url: string | null;
+  level: string;
   category: string;
-  creatorId: string;
-  status: CourseStatus;
-  imageUrl?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  is_published: boolean;
+  visibility: 'public' | 'private' | 'unlisted';
+  allow_self_enroll: boolean;
+  invite_code: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface CourseMember {
+  id: string;
+  course_id: string;
+  user_id: string;
+  member_role: 'student' | 'instructor' | 'manager';
+  added_by: string | null;
+  joined_at: string;
+  profile?: Profile;
+}
+
+export interface CourseInvitation {
+  id: string;
+  course_id: string;
+  email: string;
+  invited_user_id: string | null;
+  invited_by: string;
+  token: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
 }
 
 export interface Module {
@@ -172,4 +198,62 @@ export interface SalesScenario {
   customerPersonality: string;
   initialObjection?: string;
   winConditions: string[];
+}
+
+// ─── Simulator Config Types ───────────────────────────────────────────────────
+export type SimulatorMode = 'knowledge_check' | 'sales_simulation';
+
+export interface BaseSimulatorConfig {
+  mode: SimulatorMode;
+}
+
+export interface KnowledgeCheckConfig extends BaseSimulatorConfig {
+  mode: 'knowledge_check';
+  sessionSettings: {
+    estimatedMinutes: number;
+    minQuestions: number;
+    maxQuestions: number;
+    maxFollowUpsPerQuestion: number;
+    passingScore: number;
+  };
+  questionDistribution: {
+    basic: number;
+    understanding: number;
+    application: number;
+    summary: number;
+  };
+}
+
+export interface SalesSimulationConfig extends BaseSimulatorConfig {
+  mode: 'sales_simulation';
+  sessionSettings: {
+    estimatedMinutes: number;
+    minTurns: number;
+    maxTurns: number;
+    maxFollowUpsPerTopic: number;
+    maxRepeatedQuestion: number;
+    autoCompleteScore: number;
+  };
+  stageTurnTargets: {
+    early: number;
+    mid: number;
+    closing: number;
+    complete: number;
+  };
+  questionStrategy: {
+    basicQuestions: number;
+    deepQuestions: number;
+    objections: number;
+    closingQuestions: number;
+  };
+}
+
+export type SimulatorConfig = KnowledgeCheckConfig | SalesSimulationConfig;
+
+export interface SimulatorEvaluation {
+  informationAccuracy: number;
+  needsDiscovery: number;
+  answerStructure: number;
+  objectionHandling: number;
+  nextStepClosing: number;
 }

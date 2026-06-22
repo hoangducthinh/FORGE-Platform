@@ -74,6 +74,9 @@ export interface Database {
           level: string
           category: string
           is_published: boolean
+          visibility: 'public' | 'private' | 'unlisted'
+          allow_self_enroll: boolean
+          invite_code: string | null
           created_by: string
           created_at: string
         }
@@ -85,6 +88,9 @@ export interface Database {
           level: string
           category: string
           is_published?: boolean
+          visibility?: 'public' | 'private' | 'unlisted'
+          allow_self_enroll?: boolean
+          invite_code?: string | null
           created_by: string
           created_at?: string
         }
@@ -96,6 +102,9 @@ export interface Database {
           level?: string
           category?: string
           is_published?: boolean
+          visibility?: 'public' | 'private' | 'unlisted'
+          allow_self_enroll?: boolean
+          invite_code?: string | null
           created_by?: string
           created_at?: string
         }
@@ -125,7 +134,71 @@ export interface Database {
           order?: number
           created_at?: string
         }
-      }
+      },
+      course_members: {
+        Row: {
+          id: string
+          course_id: string
+          user_id: string
+          member_role: 'student' | 'instructor' | 'manager'
+          added_by: string | null
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          course_id: string
+          user_id: string
+          member_role?: 'student' | 'instructor' | 'manager'
+          added_by?: string | null
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          course_id?: string
+          user_id?: string
+          member_role?: 'student' | 'instructor' | 'manager'
+          added_by?: string | null
+          joined_at?: string
+        }
+      },
+      course_invitations: {
+        Row: {
+          id: string
+          course_id: string
+          email: string
+          invited_user_id: string | null
+          invited_by: string
+          token: string
+          status: 'pending' | 'accepted' | 'revoked'
+          expires_at: string
+          accepted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          course_id: string
+          email: string
+          invited_user_id?: string | null
+          invited_by: string
+          token?: string
+          status?: 'pending' | 'accepted' | 'revoked'
+          expires_at: string
+          accepted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          course_id?: string
+          email?: string
+          invited_user_id?: string | null
+          invited_by?: string
+          token?: string
+          status?: 'pending' | 'accepted' | 'revoked'
+          expires_at?: string
+          accepted_at?: string | null
+          created_at?: string
+        }
+      },
       lessons: {
         Row: {
           id: string
@@ -260,6 +333,10 @@ export interface Database {
           session_avg: number
           turns_count: number
           last_feedback: string | null
+          started_at: string
+          ended_at: string | null
+          elapsed_seconds: number
+          max_duration_seconds: number
           created_at: string
           updated_at: string
         }
@@ -274,6 +351,10 @@ export interface Database {
           session_avg?: number
           turns_count?: number
           last_feedback?: string | null
+          started_at?: string
+          ended_at?: string | null
+          elapsed_seconds?: number
+          max_duration_seconds?: number
           created_at?: string
           updated_at?: string
         }
@@ -288,6 +369,10 @@ export interface Database {
           session_avg?: number
           turns_count?: number
           last_feedback?: string | null
+          started_at?: string
+          ended_at?: string | null
+          elapsed_seconds?: number
+          max_duration_seconds?: number
           created_at?: string
           updated_at?: string
         }
@@ -303,6 +388,8 @@ export interface Database {
           response_source: string | null
           score_delta: number | null
           stage: string | null
+          topic_key: string | null
+          turn_score: number | null
           created_at: string
         }
         Insert: {
@@ -315,6 +402,8 @@ export interface Database {
           response_source?: string | null
           score_delta?: number | null
           stage?: string | null
+          topic_key?: string | null
+          turn_score?: number | null
           created_at?: string
         }
         Update: {
@@ -327,6 +416,8 @@ export interface Database {
           response_source?: string | null
           score_delta?: number | null
           stage?: string | null
+          topic_key?: string | null
+          turn_score?: number | null
           created_at?: string
         }
       }

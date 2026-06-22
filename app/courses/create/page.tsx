@@ -21,15 +21,25 @@ export default function CreateCoursePage() {
     category: 'Sales Skills',
     level: 'Beginner',
     thumbnail_url: '',
-    is_public: true
+    visibility: 'private',
+    allow_self_enroll: false
   });
 
   const handleChange = (e: any) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      };
+      
+      // If visibility changes to private, disable self-enroll
+      if (name === 'visibility' && value === 'private') {
+        newData.allow_self_enroll = false;
+      }
+      
+      return newData;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,8 +54,9 @@ export default function CreateCoursePage() {
         level: formData.level,
         thumbnail_url: formData.thumbnail_url || null,
         is_published: true, // Auto publish for simplicity in demo
+        visibility: formData.visibility,
+        allow_self_enroll: formData.allow_self_enroll,
         created_by: user.id
-        // Add other fields if needed
       } as any).select().single();
 
       if (error) throw error;
@@ -132,6 +143,44 @@ export default function CreateCoursePage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">URL Ảnh bìa (tùy chọn)</label>
                 <Input name="thumbnail_url" value={formData.thumbnail_url} onChange={handleChange} placeholder="https://..." />
+              </div>
+
+              <div className="border-t border-gray-200 dark:border-slate-700 pt-6 mt-6">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Quyền riêng tư</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Chế độ hiển thị</label>
+                    <select 
+                      name="visibility" 
+                      value={formData.visibility} 
+                      onChange={handleChange}
+                      className="w-full rounded-md border border-gray-300 dark:border-slate-600 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                    >
+                      <option value="public">Công khai (Ai cũng có thể xem)</option>
+                      <option value="private">Riêng tư (Chỉ thành viên được mời)</option>
+                      <option value="unlisted">Không công khai (Truy cập bằng link)</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center mt-4">
+                    <input 
+                      type="checkbox" 
+                      id="allow_self_enroll" 
+                      name="allow_self_enroll" 
+                      checked={formData.allow_self_enroll} 
+                      onChange={handleChange}
+                      disabled={formData.visibility === 'private'}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="allow_self_enroll" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Cho phép tự động đăng ký (Self-enroll)
+                    </label>
+                  </div>
+                  {formData.visibility === 'private' && (
+                    <p className="text-xs text-orange-500 mt-1">Khóa học riêng tư không cho phép tự đăng ký.</p>
+                  )}
+                </div>
               </div>
 
             </div>

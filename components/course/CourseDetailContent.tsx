@@ -267,16 +267,32 @@ export default function CourseDetailContent({
               <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-2xl">{course.description}</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-full font-medium">
-                    {course.category}
-                  </span>
+                  <div className="flex gap-2">
+                    <span className="text-sm bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-full font-medium">
+                      {course.category}
+                    </span>
+                    {course.visibility === 'private' && (
+                      <span className="text-sm bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-full font-medium">Riêng tư</span>
+                    )}
+                    {course.visibility === 'unlisted' && (
+                      <span className="text-sm bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 px-4 py-2 rounded-full font-medium">Ẩn</span>
+                    )}
+                  </div>
                   {canManage && (
-                    <Link
-                      href={`/courses/${courseId}/lessons/create`}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-full transition-colors shadow-sm"
-                    >
-                      <Plus className="w-4 h-4" /> Thêm bài học
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/courses/${courseId}/members`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-sm font-medium rounded-full transition-colors shadow-sm"
+                      >
+                        Quản lý học viên
+                      </Link>
+                      <Link
+                        href={`/courses/${courseId}/lessons/create`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-full transition-colors shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" /> Thêm bài học
+                      </Link>
+                    </div>
                   )}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -318,6 +334,7 @@ export default function CourseDetailContent({
                   salesTips={config.salesTips || DEFAULT_SIMULATOR_CONFIG.salesTips}
                   openingMessage={config.openingCustomerMessage || DEFAULT_SIMULATOR_CONFIG.openingCustomerMessage}
                   simulationMode={config.mode as any}
+                  simulatorConfig={config}
                   courseId={courseId}
                   lessonId={activeLesson.id}
                   onBack={() => setActiveLessonId(null)}

@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle } from 'lucide-react';
 
-export default function LoginPage() {
+import { Suspense } from 'react';
+
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,12 +19,15 @@ export default function LoginPage() {
   const { user, isLoading: isAuthLoading, login } = useAuth();
   const router = useRouter();
 
-  // If already logged in, redirect to dashboard
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get('returnUrl');
+
+  // If already logged in, redirect to returnUrl or dashboard
   useEffect(() => {
     if (user && !isAuthLoading) {
-      router.push('/dashboard');
+      router.push(returnUrl || '/dashboard');
     }
-  }, [user, isAuthLoading, router]);
+  }, [user, isAuthLoading, router, returnUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +124,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center space-y-3">
             <p className="text-gray-600 dark:text-gray-400 text-sm">
               Don't have an account?{' '}
-              <Link href="/auth/signup" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 font-semibold">
+              <Link href={returnUrl ? `/auth/signup?returnUrl=${encodeURIComponent(returnUrl)}` : "/auth/signup"} className="text-orange-600 dark:text-orange-400 hover:text-orange-700 font-semibold">
                 Sign up
               </Link>
             </p>
@@ -132,5 +137,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
