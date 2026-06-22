@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Plus, BookOpen } from 'lucide-react';
+import { Plus, BookOpen, Trash2 } from 'lucide-react';
 import type { Course } from '@/lib/supabase/database.types';
 
 export default function MyCoursesPage() {
@@ -36,6 +36,28 @@ export default function MyCoursesPage() {
 
     loadMyCourses();
   }, [user, supabase]);
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa khóa học này cùng toàn bộ bài học bên trong? Hành động này không thể hoàn tác.')) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`
+        }
+      });
+      
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Có lỗi xảy ra khi xóa khóa học.');
+      
+      setCourses(courses.filter(c => c.id !== courseId));
+    } catch (err: any) {
+      console.error('Lỗi khi xóa khóa học:', err);
+      alert(err.message);
+    }
+  };
 
   const canCreate = (role === 'student' && isPremium) || role === 'manager' || role === 'admin';
 
@@ -88,12 +110,21 @@ export default function MyCoursesPage() {
                   </div>
                   <div className="p-5">
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {course.category}
-                      </span>
-                      <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${course.is_published ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}>
-                        {course.is_published ? 'Đã xuất bản' : 'Bản nháp'}
-                      </span>
+                      <div className="flex gap-2">
+                        <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {course.category}
+                        </span>
+                        <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${course.is_published ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}`}>
+                          {course.is_published ? 'Đã xuất bản' : 'Bản nháp'}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => handleDeleteCourse(course.id)} 
+                        className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors" 
+                        title="Xóa khóa học"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1 line-clamp-2">{course.title}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">{course.description}</p>

@@ -5,7 +5,8 @@ import { AIChat } from '@/components/layout/AIChat';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
-import { ChevronDown, ChevronUp, BookOpen, CheckCircle2, Play, FileText, AlertCircle, Bot, Plus, Pencil } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, ChevronUp, BookOpen, CheckCircle2, Play, FileText, AlertCircle, Bot, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import type { Course, Lesson } from '@/lib/supabase/database.types';
 import AISalesSimulator from '@/components/lesson/AISalesSimulator';
@@ -77,8 +78,10 @@ export default function CourseDetailContent({
 
   const { user, isPremium, role } = useAuth();
   const supabase = createClient();
+  const router = useRouter();
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
   const [isUpdatingProgress, setIsUpdatingProgress] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const canManage =
     role === 'admin' ||
@@ -213,6 +216,31 @@ export default function CourseDetailContent({
     }
   };
 
+  const handleDeleteCourse = async () => {
+    if (!confirm('Bạn có chắc chắn muốn xóa khóa học này cùng toàn bộ bài học bên trong? Hành động này không thể hoàn tác.')) return;
+    
+    setIsDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`
+        }
+      });
+      
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Có lỗi xảy ra khi xóa khóa học.');
+      
+      alert('Đã xóa khóa học thành công!');
+      router.push('/my-courses');
+    } catch (err: any) {
+      console.error('Lỗi khi xóa khóa học:', err);
+      alert(err.message);
+      setIsDeleting(false);
+    }
+  };
+
   // Get the active lesson object
   const activeLesson = activeLessonId ? lessons.find(l => l.id === activeLessonId) : null;
 
@@ -292,6 +320,13 @@ export default function CourseDetailContent({
                       >
                         <Plus className="w-4 h-4" /> Thêm bài học
                       </Link>
+                      <button
+                        onClick={handleDeleteCourse}
+                        disabled={isDeleting}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 text-sm font-medium rounded-full transition-colors shadow-sm disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" /> {isDeleting ? 'Đang xóa...' : 'Xóa'}
+                      </button>
                     </div>
                   )}
                 </div>
