@@ -75,11 +75,14 @@ export function Navbar() {
                 <Link href="/courses/create" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
                   Create Course
                 </Link>
+                <Link href="/my-courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
+                  My Courses
+                </Link>
+                <Link href="/team/dashboard" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 text-sm font-bold">
+                  Theo dõi nhân viên
+                </Link>
                 <Link href="/admin/courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
                   Manage Courses
-                </Link>
-                <Link href="/admin/platform" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
-                  Reports
                 </Link>
               </>
             )}
@@ -89,6 +92,9 @@ export function Navbar() {
               <>
                 <Link href="/courses/create" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
                   Create Course
+                </Link>
+                <Link href="/team/dashboard" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 text-sm font-bold">
+                  Theo dõi nhân viên
                 </Link>
                 <Link href="/admin/courses" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
                   Manage Courses

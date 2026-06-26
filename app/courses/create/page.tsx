@@ -123,6 +123,7 @@ export default function CreateCoursePage() {
                     <option value="Real Estate">Bất động sản</option>
                     <option value="Communication">Giao tiếp</option>
                     <option value="Negotiation">Đàm phán</option>
+                    <option value="AI & EdTech">AI & EdTech</option>
                   </select>
                 </div>
                 <div>

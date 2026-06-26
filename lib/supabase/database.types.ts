@@ -421,6 +421,38 @@ export interface Database {
           created_at?: string
         }
       }
+      course_certificates: {
+        Row: {
+          id: string
+          user_id: string
+          course_id: string
+          certificate_number: string
+          progress_percent: number
+          average_ai_score: number
+          issued_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          course_id: string
+          certificate_number: string
+          progress_percent?: number
+          average_ai_score?: number
+          issued_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          course_id?: string
+          certificate_number?: string
+          progress_percent?: number
+          average_ai_score?: number
+          issued_at?: string
+          created_at?: string
+        }
+      }
     },
     Views: {
       [_ in never]: never
@@ -444,3 +476,5 @@ export type UserCourseProgress = Database['public']['Tables']['user_course_progr
 export type SimulatorSession = Database['public']['Tables']['simulator_sessions']['Row']
 export type SimulatorMessage = Database['public']['Tables']['simulator_messages']['Row']
 export type LearningSession = Database['public']['Tables']['learning_sessions']['Row']
+export type CourseCertificate = Database['public']['Tables']['course_certificates']['Row']
+
